@@ -1,0 +1,53 @@
+# CCTV AI 에이전트
+
+현장 CCTV 화면을 한곳에서 보면서 AI가 위험 요소를 찾아 알려주고,
+사람이 쓰러지거나 크게 다치면 상황을 판단해 **112/119 신고 절차**까지 이어주는 보조 관제 시스템입니다.
+
+- 구상서·일정(~10/28): [`docs/PLAN.md`](docs/PLAN.md)
+
+## 주요 기능
+- **분할 화면 직접 설정**: 1/4/9/16 분할 + 가로×세로 직접 입력 (브라우저에 저장)
+- **클릭하면 확대**, 확대 화면에서 **◀ ▶ / 키보드 ←→ / 스와이프로 카메라 넘김**
+- 카메라가 분할 수보다 많으면 그리드도 페이지 단위로 넘김
+- AI 이벤트 패널, 위험도별 테두리 색 (주의·위험·긴급)
+- **상황 판단**: 쓰러짐 → (1.5초 유지) 확정 → (10초 무반응) 긴급 → 119
+  화재·연기 → 119, 폭행 → 112, 위험구역 진입·안전모 미착용 → 알림
+- **긴급 신고 모달**: 15초 카운트다운 동안 `오탐 취소` / `즉시 신고`, 응답 없으면 자동 신고
+
+## 바로 보기 (데모)
+`frontend/index.html` 을 브라우저로 열면 가상 영상으로 동작합니다 (DEMO).
+상단의 `상황 발생` 으로 쓰러짐/화재/폭행 등을 시연할 수 있습니다.
+
+## 서버 실행 (LIVE)
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+# http://localhost:8000 접속
+```
+`backend/config.yaml` 에서 카메라 `source` 에 RTSP 주소(예: `rtsp://user:pass@192.168.0.10:554/stream1`),
+영상 파일 경로, 또는 웹캠 번호(`0`)를 넣으면 YOLO 분석이 시작됩니다.
+비워둔 카메라는 데모 영상으로 표시됩니다.
+
+## 테스트
+```bash
+cd backend
+pip install -r requirements-dev.txt fastapi pyyaml
+python -m pytest
+```
+
+## 구조
+```
+backend/
+  app/situation.py   상황 판단 엔진 (쓰러짐 상태머신, 화재, 구역, 안전모) ★
+  app/dispatcher.py  신고 에스컬레이션 (카운트다운, 취소, 자동 발송, mock/webhook/sms)
+  app/detector.py    YOLO 포즈·추적·안전모·화재 인식
+  app/stream.py      카메라별 영상 읽기 워커 + MJPEG
+  app/main.py        FastAPI (REST, WebSocket, 프론트 제공)
+  config.yaml        카메라·구역·임계값·신고 채널 설정
+frontend/            관제 화면 (빌드 없이 실행)
+docs/PLAN.md         구상서
+```
+
+> ⚠️ 신고 채널 기본값은 `mock`(로그만 남김)입니다. 112/119 직접 자동 연동은 오신고 문제로
+> 관할 기관 협의가 필요하며, 우선 현장 관리자 문자·관제업체 webhook 연동을 권장합니다.

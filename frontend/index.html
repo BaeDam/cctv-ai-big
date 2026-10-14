@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CCTV AI 관제</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◉</span>
+      <div>
+        <div class="title">CCTV AI 에이전트</div>
+        <div class="site" id="siteName">현장</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="layout-picker" role="group" aria-label="분할 화면">
+        <button data-layout="1x1">1</button>
+        <button data-layout="2x2">4</button>
+        <button data-layout="3x3">9</button>
+        <button data-layout="4x4">16</button>
+        <span class="custom">
+          <input id="colsInput" type="number" min="1" max="8" aria-label="가로" />
+          <span>×</span>
+          <input id="rowsInput" type="number" min="1" max="8" aria-label="세로" />
+          <button id="applyCustom">적용</button>
+        </span>
+      </div>
+
+      <div class="pager">
+        <button id="prevPage" aria-label="이전 페이지">◀</button>
+        <span id="pageInfo">1 / 1</span>
+        <button id="nextPage" aria-label="다음 페이지">▶</button>
+      </div>
+
+      <div class="sim">
+        <select id="simCamera" aria-label="시뮬레이션 카메라"></select>
+        <select id="simType" aria-label="시뮬레이션 상황">
+          <option value="fall">쓰러짐 → 무반응 (119)</option>
+          <option value="fire">화재 (119)</option>
+          <option value="violence">폭행/싸움 (112)</option>
+          <option value="zone_intrusion">위험구역 진입</option>
+          <option value="no_helmet">안전모 미착용</option>
+        </select>
+        <button id="simRun" class="accent">상황 발생</button>
+      </div>
+    </div>
+
+    <div class="status">
+      <span id="connBadge" class="badge demo">DEMO</span>
+      <span id="clock" class="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <section id="grid" class="grid" aria-label="카메라 화면"></section>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>AI 이벤트</h2>
+        <button id="clearEvents" class="ghost">지우기</button>
+      </div>
+      <ul id="eventList" class="event-list"></ul>
+    </aside>
+  </main>
+
+  <!-- 확대 보기 -->
+  <div id="viewer" class="viewer" hidden>
+    <div class="viewer-head">
+      <div>
+        <span id="viewerName" class="viewer-name"></span>
+        <span id="viewerIndex" class="viewer-index"></span>
+      </div>
+      <button id="viewerClose" class="ghost" aria-label="닫기">✕ 닫기 (Esc)</button>
+    </div>
+    <div class="viewer-body">
+      <button id="viewerPrev" class="nav prev" aria-label="이전 카메라">‹</button>
+      <div id="viewerStage" class="viewer-stage"></div>
+      <button id="viewerNext" class="nav next" aria-label="다음 카메라">›</button>
+    </div>
+    <ul id="viewerEvents" class="viewer-events"></ul>
+  </div>
+
+  <!-- 긴급 신고 모달 -->
+  <div id="emergency" class="emergency" hidden>
+    <div class="emergency-box" role="alertdialog" aria-labelledby="emTitle">
+      <div class="em-target" id="emTarget">119</div>
+      <h2 id="emTitle">긴급 상황 감지</h2>
+      <p id="emMessage" class="em-message"></p>
+      <p id="emCamera" class="em-camera"></p>
+      <div class="em-feed" id="emFeed"></div>
+      <div class="em-countdown"><span id="emSeconds">15</span>초 후 자동 신고</div>
+      <div class="em-bar"><div id="emBar"></div></div>
+      <div class="em-actions">
+        <button id="emCancel" class="ghost big">오탐 — 신고 취소</button>
+        <button id="emConfirm" class="danger big">지금 즉시 신고</button>
+      </div>
+      <p class="em-note" id="emQueue"></p>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

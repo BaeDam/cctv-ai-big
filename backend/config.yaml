@@ -1,0 +1,47 @@
+# CCTV AI 에이전트 설정
+
+site:
+  name: "OO건설 1공구"
+  address: "서울특별시 OO구 OO로 123"
+
+models:
+  pose: "yolo11n-pose.pt"   # 첫 실행 시 자동 다운로드
+  helmet: null              # 예: "models/helmet.pt" (클래스: helmet / head)
+  fire: null                # 예: "models/fire.pt"   (클래스: fire / smoke)
+  fps: 5                    # 카메라별 초당 분석 프레임
+
+# source: RTSP 주소, 영상 파일 경로, 웹캠 번호(0). 비워두면 화면에 데모 영상 표시
+cameras:
+  - { id: cam01, name: "정문 출입구",     source: "" }
+  - { id: cam02, name: "자재 야적장",     source: "" }
+  - { id: cam03, name: "타워크레인 하부", source: "" }
+  - { id: cam04, name: "1층 작업장",      source: "" }
+  - { id: cam05, name: "2층 작업장",      source: "" }
+  - { id: cam06, name: "계단실",          source: "" }
+  - { id: cam07, name: "지하 주차장",     source: "" }
+  - { id: cam08, name: "후문",            source: "" }
+  - { id: cam09, name: "가설 사무실",     source: "" }
+  - { id: cam10, name: "옥상",            source: "" }
+  - { id: cam11, name: "장비 주기장",     source: "" }
+  - { id: cam12, name: "용접 작업장",     source: "" }
+
+# 위험구역: 카메라 영상 픽셀 좌표 다각형
+zones:
+  cam03:
+    크레인 작업반경: [[200, 300], [600, 300], [640, 480], [160, 480]]
+
+situation:
+  confirm_sec: 1.5      # 쓰러짐 의심 → 확정
+  immobile_sec: 10      # 쓰러진 뒤 이 시간 동안 움직임 없으면 긴급(119)
+  fire_confirm_frames: 5
+  helmet_confirm_frames: 10
+  event_cooldown_sec: 60
+
+emergency:
+  countdown_sec: 15     # 관리자 취소 가능 시간, 지나면 자동 신고
+  channels:
+    - type: mock
+    # - type: webhook
+    #   url: "https://관제업체/api/alarm"
+    # - type: sms
+    #   recipients: ["010-0000-0000"]   # 현장 안전관리자
