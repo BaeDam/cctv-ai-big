@@ -1,0 +1,799 @@
+<title>CCTV AI 관제</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 관제실 콘솔: 화면이 주인공, 크롬은 어둡고 조용하게. 위험도 색은 의미로만 쓴다 */
+:root{
+  color-scheme:dark;
+  --bg:#0a0e13; --surface:#111821; --surface-2:#18212d; --line:#243041;
+  --fg:#e5ecf3; --muted:#8a97a8; --accent:#4f8cff;
+  --ok:#22c55e; --warn:#facc15; --danger:#fb923c; --crit:#ef4444;
+  --font:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;display:flex;flex-direction:column;overflow:hidden;margin:0}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{background:var(--crit);border-color:var(--crit);color:#fff}
+button.ghost{background:transparent}
+button.big{padding:12px 20px;font-size:16px;font-weight:700}
+input[type=number]{width:48px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:5px 6px}
+
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{display:flex;gap:10px;align-items:center;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--crit);animation:blink 1.6s infinite}
+.brand b{font-size:16px}
+.brand small{display:block;color:var(--muted);font-size:12px}
+.group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sep{width:1px;height:24px;background:var(--line)}
+.spacer{flex:1}
+.ai-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.badge{padding:3px 9px;border-radius:999px;font-weight:700;font-size:12px}
+.badge.load{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.badge.live{background:color-mix(in srgb,var(--ok) 22%,transparent);color:var(--ok)}
+.badge.err{background:color-mix(in srgb,var(--crit) 22%,transparent);color:var(--crit)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.main{flex:1;display:flex;min-height:0}
+.grid{flex:1;display:grid;gap:6px;padding:8px;min-width:0;min-height:0}
+.tile{position:relative;background:#000;border:2px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:zoom-in;min-height:0}
+.tile:hover{border-color:var(--accent)}
+.tile.empty{background:var(--surface);border-style:dashed;cursor:default;display:grid;place-items:center;color:var(--muted);font-size:13px}
+.tile canvas{width:100%;height:100%;display:block}
+.tile-name{position:absolute;left:8px;top:6px;background:rgba(0,0,0,.62);padding:2px 8px;border-radius:4px;font-size:12px;max-width:calc(100% - 110px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile-fps{position:absolute;right:8px;top:6px;background:rgba(0,0,0,.62);padding:2px 7px;border-radius:4px;font-size:11px;color:var(--muted)}
+.tile-alert{position:absolute;left:8px;right:8px;bottom:6px;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile[data-level=danger]{border-color:var(--danger)}
+.tile[data-level=critical]{border-color:var(--crit);animation:pulse 1s infinite}
+.tile[data-level=danger] .tile-alert{background:var(--danger);color:#111}
+.tile[data-level=critical] .tile-alert{background:var(--crit);color:#fff}
+
+.panel{width:310px;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:10px;color:var(--muted)}
+.tabs button.on{color:var(--fg);box-shadow:inset 0 -2px 0 var(--accent);background:transparent}
+.pane{flex:1;overflow-y:auto;padding:10px;min-height:0}
+.ev{padding:8px 10px;margin-bottom:6px;background:var(--surface-2);border-left:4px solid var(--muted);border-radius:6px;cursor:pointer}
+.ev:hover{outline:1px solid var(--accent)}
+.ev.danger{border-left-color:var(--danger)} .ev.critical{border-left-color:var(--crit)} .ev.ok{border-left-color:var(--ok)}
+.ev-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}
+.ev-msg{font-weight:600;margin-top:2px}
+.ev-sub{font-size:12px;color:var(--crit);margin-top:2px}
+.empty-msg{color:var(--muted);text-align:center;padding:18px 8px;line-height:1.6}
+.setting{display:grid;gap:4px;margin-bottom:14px}
+.setting label{display:flex;justify-content:space-between;font-size:13px}
+.setting input[type=range]{width:100%;accent-color:var(--accent)}
+.setting small{color:var(--muted);font-size:12px;line-height:1.5}
+.help{color:var(--muted);font-size:12.5px;line-height:1.65}
+.help b{color:var(--fg)}
+.help ul{padding-left:18px;margin:6px 0}
+
+.viewer{position:fixed;inset:0;z-index:20;background:rgba(5,8,12,.96);display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.viewer-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:12px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.viewer-head b{font-size:18px}
+.viewer-head span{color:var(--muted);margin-left:8px}
+.viewer-body{flex:1;display:flex;align-items:center;gap:8px;padding:0 8px;min-height:0}
+.stage{flex:1;height:100%;background:#000;border-radius:var(--r);overflow:hidden;touch-action:pan-y;transition:transform .16s,opacity .16s}
+.stage canvas{width:100%;height:100%;display:block}
+.stage.out-l{transform:translateX(-40px);opacity:0} .stage.out-r{transform:translateX(40px);opacity:0}
+.nav{width:54px;height:120px;font-size:40px;line-height:1;background:rgba(255,255,255,.06);border:0;border-radius:var(--r)}
+
+.emg{position:fixed;inset:0;z-index:40;background:rgba(90,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;animation:flash 1s infinite}
+.emg-box{width:min(560px,100%);background:var(--surface);border:3px solid var(--crit);border-radius:16px;padding:20px;text-align:center;box-shadow:0 0 60px rgba(239,68,68,.45)}
+.emg-target{display:inline-block;font-size:30px;font-weight:900;background:var(--crit);color:#fff;padding:2px 18px;border-radius:10px}
+.emg-box h2{margin:10px 0 2px;font-size:20px}
+.emg-msg{font-size:17px;font-weight:700;margin:4px 0}
+.emg-cam{color:var(--muted);margin:0 0 10px}
+.emg-feed{height:210px;border-radius:8px;overflow:hidden;background:#000;margin-bottom:12px}
+.emg-feed canvas{width:100%;height:100%;display:block}
+#emgSec{font-size:28px;font-weight:900;color:var(--crit)}
+.emg-bar{height:8px;background:var(--surface-2);border-radius:4px;margin:8px 0 14px;overflow:hidden}
+#emgBar{height:100%;background:var(--crit);width:100%}
+.emg-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.emg-note{color:var(--muted);font-size:12px;margin:10px 0 0}
+
+.toasts{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:50;display:flex;flex-direction:column;gap:8px;max-width:calc(100% - 32px)}
+.toast{background:var(--surface-2);border-left:4px solid var(--accent);padding:10px 14px;border-radius:6px;max-width:360px;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.toast.danger{border-left-color:var(--danger)} .toast.critical{border-left-color:var(--crit)} .toast.ok{border-left-color:var(--ok)}
+
+.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;padding:12px}
+
+@keyframes blink{50%{opacity:.25}}
+@keyframes pulse{50%{box-shadow:0 0 0 4px rgba(239,68,68,.5)}}
+@keyframes flash{50%{background:rgba(130,0,0,.65)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media (max-width:900px){
+  body{overflow:auto}
+  .main{flex-direction:column}
+  .grid{min-height:62vh}
+  .panel{width:auto;border-left:0;border-top:1px solid var(--line);min-height:300px}
+  .nav{width:40px;font-size:30px}
+  .sep{display:none}
+}
+</style>
+
+<header class="top">
+  <div class="brand"><span class="dot"></span><div><b>CCTV AI 관제</b><small>AI가 이 브라우저 안에서 직접 영상을 분석합니다</small></div></div>
+  <div class="group" role="group" aria-label="분할 화면">
+    <button data-layout="1x1">1</button><button data-layout="2x2">4</button><button data-layout="3x3">9</button><button data-layout="4x4">16</button>
+    <input id="cols" type="number" min="1" max="6" aria-label="가로 칸 수"><span>×</span><input id="rows" type="number" min="1" max="6" aria-label="세로 칸 수">
+    <button id="applyLayout">적용</button>
+  </div>
+  <span class="sep"></span>
+  <div class="group">
+    <button id="prevPage" aria-label="이전 페이지">◀</button><span id="pageInfo" class="mono">1 / 1</span><button id="nextPage" aria-label="다음 페이지">▶</button>
+  </div>
+  <span class="sep"></span>
+  <div class="group">
+    <label><button id="addVideo" class="primary">＋ 내 영상으로 테스트</button></label>
+    <input id="fileInput" type="file" accept="video/*" multiple hidden>
+    <button id="restart">영상 처음부터</button>
+    <button id="aiToggle" class="on" aria-pressed="true">AI 분석 켜짐</button>
+  </div>
+  <span class="spacer"></span>
+  <div class="ai-status"><span id="aiBadge" class="badge load">AI 준비 중</span><span id="aiInfo" class="mono"></span></div>
+</header>
+
+<main class="main">
+  <section id="grid" class="grid" aria-label="카메라 화면"></section>
+  <aside class="panel">
+    <div class="tabs" role="tablist">
+      <button class="on" data-tab="events" role="tab">AI 이벤트</button>
+      <button data-tab="settings" role="tab">감지 설정</button>
+      <button data-tab="help" role="tab">사용법</button>
+    </div>
+    <div id="pane-events" class="pane"><ul id="eventList" style="list-style:none;margin:0;padding:0"></ul></div>
+    <div id="pane-settings" class="pane" hidden>
+      <div class="setting">
+        <label for="sConf">사람 인식 민감도 <span id="vConf" class="mono"></span></label>
+        <input id="sConf" type="range" min="0.10" max="0.60" step="0.05">
+        <small>낮출수록 애매한 자세도 사람으로 잡지만 잘못 잡는 경우도 늘어납니다. 기본 0.25</small>
+      </div>
+      <div class="setting">
+        <label for="sConfirm">쓰러짐 확정 시간 <span id="vConfirm" class="mono"></span></label>
+        <input id="sConfirm" type="range" min="0.4" max="3" step="0.1">
+        <small>넘어지는 동작 뒤 누운 상태가 이만큼 이어지면 쓰러짐으로 확정. 기본 1.0초</small>
+      </div>
+      <div class="setting">
+        <label for="sImmobile">무반응 판정 시간 <span id="vImmobile" class="mono"></span></label>
+        <input id="sImmobile" type="range" min="3" max="20" step="1">
+        <small>쓰러진 뒤 이 시간 동안 움직임이 없으면 긴급(119). 기본 8초</small>
+      </div>
+      <div class="setting">
+        <label for="sCountdown">자동 신고 카운트다운 <span id="vCountdown" class="mono"></span></label>
+        <input id="sCountdown" type="range" min="5" max="30" step="1">
+        <small>이 시간 안에 취소하지 않으면 자동 신고. 기본 15초</small>
+      </div>
+      <button id="resetSettings" class="ghost">기본값으로</button>
+    </div>
+    <div id="pane-help" class="pane help" hidden>
+      <p><b>무엇이 실제로 동작하나요?</b></p>
+      <ul>
+        <li>사람·자세 인식 AI(YOLO11 pose)가 <b>이 브라우저 안에서</b> 영상을 직접 분석합니다. 서버로 영상을 보내지 않습니다.</li>
+        <li>쓰러짐 → 무반응 → 119 카운트다운 판단 로직은 실제 백엔드와 같은 규칙입니다.</li>
+        <li>신고는 <b>시연 모드</b>라 실제로 발송되지 않고 기록만 남습니다.</li>
+      </ul>
+      <p><b>조작</b></p>
+      <ul>
+        <li>위쪽 숫자로 분할 수 변경, 가로×세로 직접 입력 가능</li>
+        <li>화면 클릭 → 확대, ‹ › 버튼·키보드 ←/→·스와이프로 넘기기, Esc로 닫기</li>
+        <li><b>＋ 내 영상으로 테스트</b>: 휴대폰으로 찍은 영상(전신이 보이게 서 있다가 바닥에 눕기)을 올리면 그 영상도 분석합니다</li>
+        <li>감지 설정 탭에서 판정 시간과 민감도를 바꿔 볼 수 있습니다</li>
+      </ul>
+      <p><b>샘플 영상</b></p>
+      <ul>
+        <li>공개 낙상 데이터셋(github.com/ambianic/fall-detection)의 요양시설 CCTV 영상 4개</li>
+        <li>원본이 넘어진 직후 끝나서 무반응 판정을 볼 수 있게 마지막 장면을 12초 정지 화면으로 늘렸습니다</li>
+      </ul>
+      <p><b>알아둘 점</b></p>
+      <ul>
+        <li>공개 AI 모델은 바닥에 쓰러진 사람을 잘 인식하지 못합니다. 그래서 "넘어지는 동작 직후 화면 가운데서 인식이 끊김"도 쓰러짐으로 보고, 마지막 위치에 <b>FALL?</b> 박스를 그립니다.</li>
+        <li>분석 속도는 이 기기의 CPU 성능에 따라 다릅니다. 각 화면 오른쪽 위에 초당 분석 장수가 표시됩니다.</li>
+      </ul>
+    </div>
+  </aside>
+</main>
+
+<div id="viewer" class="viewer" hidden>
+  <div class="viewer-head"><div><b id="vName"></b><span id="vIndex" class="mono"></span></div><button id="vClose" class="ghost">✕ 닫기 (Esc)</button></div>
+  <div class="viewer-body">
+    <button id="vPrev" class="nav" aria-label="이전 카메라">‹</button>
+    <div id="stage" class="stage"></div>
+    <button id="vNext" class="nav" aria-label="다음 카메라">›</button>
+  </div>
+</div>
+
+<div id="emg" class="emg" hidden>
+  <div class="emg-box" role="alertdialog" aria-labelledby="emgTitle">
+    <div id="emgTarget" class="emg-target">119</div>
+    <h2 id="emgTitle">긴급 상황 — 119 구급</h2>
+    <p id="emgMsg" class="emg-msg"></p>
+    <p id="emgCam" class="emg-cam"></p>
+    <div id="emgFeed" class="emg-feed"></div>
+    <div><span id="emgSec" class="mono">15</span>초 후 자동 신고</div>
+    <div class="emg-bar"><div id="emgBar"></div></div>
+    <div class="emg-actions">
+      <button id="emgCancel" class="ghost big">오탐 — 신고 취소</button>
+      <button id="emgConfirm" class="danger big">지금 즉시 신고</button>
+    </div>
+    <p class="emg-note">시연 모드: 실제로 112/119에 발송되지 않습니다 <span id="emgQueue"></span></p>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ===================================================================== 설정 */
+// AI 실행 엔진: GPU(WebGPU)가 있으면 GPU로, 없으면 CPU(WebAssembly)로 돌린다
+const ORT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js";
+const ORT_MJS = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs";
+const MODEL_URL = "model-pose640.gz.wasm"; // gzip 압축된 ONNX 모델 (서빙 형식 때문에 .wasm 이름 사용)
+const WASM_URL = "runtime-jsep.gz.wasm"; // gzip 압축된 ONNX Runtime WebAssembly
+const IMG = 640;
+const SAMPLES = [
+  { name: "복도 A — 보행 중 낙상", src: "cam2" },
+  { name: "복도 B — 보행기 사용 중 낙상", src: "cam3" },
+  { name: "휴게실 — 풍선 놀이 중 낙상", src: "cam4" },
+  { name: "로비 — 산책 중 낙상", src: "cam5" },
+];
+const DEFAULTS = { conf: 0.25, confirm: 1.0, immobile: 8, countdown: 15 };
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const clock = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
+const now = () => performance.now() / 1000;
+
+const settings = Object.assign({}, DEFAULTS, store.get("cctv.settings", {}));
+const state = {
+  cams: [], cols: 2, rows: 2, page: 0, viewer: null,
+  events: [], incidents: [], nextIncident: 1, aiOn: true, aiReady: false,
+};
+
+/* ============================================================ 상황 판단 엔진
+   백엔드 app/situation.py 의 쓰러짐 판단 규칙을 그대로 옮김 */
+const CFG = {
+  uprightAspect: 0.8, lyingAspect: 1.2, torsoLyingDeg: 60, torsoUprightDeg: 30,
+  fallWindow: 1.0, fallDrop: 0.25, lyingConfirm: 3.0, motionRatio: 0.08,
+  trackTtl: 5, unresponsiveKeep: 60, lostSec: 0.6, signWindow: 1.2, widen: 1.35, border: 0.03, cooldown: 60,
+};
+class Engine {
+  constructor() { this.tracks = new Map(); this.lastEmit = new Map(); this.t = 0; }
+  reset(cam) { for (const k of [...this.tracks.keys()]) if (k.startsWith(cam + "|")) this.tracks.delete(k); }
+  posture(p) {
+    const w = p.box[2] - p.box[0], h = Math.max(p.box[3] - p.box[1], 1e-6), a = w / h;
+    const ang = torsoAngle(p.kp);
+    if (ang != null) { if (ang >= CFG.torsoLyingDeg) return "lying"; if (ang <= CFG.torsoUprightDeg && a < 1) return "upright"; return "other"; }
+    if (a >= CFG.lyingAspect) return "lying"; if (a < CFG.uprightAspect) return "upright"; return "other";
+  }
+  update(cam, persons, t, size) {
+    this.t = t; const ev = [];
+    for (const p of persons) ev.push(...this.person(cam, p, t));
+    ev.push(...this.lost(cam, persons, t, size));
+    this.expire(t);
+    return ev.filter(Boolean);
+  }
+  person(cam, p, t) {
+    const key = cam + "|" + p.id; let tr = this.tracks.get(key);
+    if (!tr) { tr = { cam, id: p.id, hist: [], state: "normal", since: t, anchor: null, anchorSince: 0, lyingSince: null, lastSeen: t, box: null, born: null, lostChecked: false }; this.tracks.set(key, tr); }
+    tr.lastSeen = t; tr.box = p.box; tr.lostChecked = false;
+    if (!tr.born) { tr.born = center(p.box); this.adopt(cam, p, tr, t); }
+    const [w, h] = size(p.box), [cx, cy] = center(p.box), post = this.posture(p), lying = post === "lying";
+    tr.hist.push([t, post, cy, h, w / h]); if (tr.hist.length > 120) tr.hist.shift();
+    tr.lyingSince = lying ? (tr.lyingSince ?? t) : null;
+    const out = [];
+    if (post === "upright" && tr.state !== "normal") { tr.state = "normal"; tr.since = t; tr.anchor = null; }
+    if (tr.state === "normal" && lying) {
+      if (this.fellRecently(tr, t, cy)) { tr.state = "suspect"; tr.since = t; }
+      else if (t - tr.lyingSince >= CFG.lyingConfirm) out.push(this.toFallen(cam, p, tr, t, " (누운 상태 지속)"));
+    } else if (tr.state === "suspect") {
+      if (!lying) { tr.state = "normal"; tr.since = t; }
+      else if (t - tr.since >= settings.confirm) out.push(this.toFallen(cam, p, tr, t, ""));
+    } else if (tr.state === "fallen") {
+      const diag = Math.hypot(w, h), [ax, ay] = tr.anchor || [cx, cy];
+      if (Math.hypot(cx - ax, cy - ay) / diag >= CFG.motionRatio) { tr.anchor = [cx, cy]; tr.anchorSince = t; }
+      else if (t - tr.anchorSince >= settings.immobile) { tr.state = "unresponsive"; tr.since = t; out.push(this.emit(cam, "unresponsive", t, p.id, p.box)); }
+    }
+    return out;
+  }
+  toFallen(cam, p, tr, t, extra) { tr.state = "fallen"; tr.since = t; tr.anchor = center(p.box); tr.anchorSince = t; return this.emit(cam, "fall", t, p.id, p.box, extra); }
+  fellRecently(tr, t, cyNow) {
+    for (const [tt, post, cy, h] of tr.hist) if (t - tt <= CFG.fallWindow && post === "upright" && cyNow - cy >= CFG.fallDrop * h) return true;
+    return false;
+  }
+  lost(cam, persons, t, frameSize) {
+    const seen = new Set(persons.map((p) => p.id)), out = [];
+    for (const tr of this.tracks.values()) {
+      if (tr.cam !== cam || seen.has(tr.id) || !tr.box || t - tr.lastSeen < CFG.lostSec) continue;
+      if ((tr.state === "normal" || tr.state === "suspect") && !tr.lostChecked) {
+        tr.lostChecked = true;
+        if (!this.nearBorder(tr.box, frameSize) && this.fallSigns(tr)) out.push(this.toFallen(cam, { box: tr.box }, tr, t, " (넘어진 뒤 인식 끊김)"));
+      } else if (tr.state === "fallen" && t - tr.anchorSince >= settings.immobile) {
+        tr.state = "unresponsive"; tr.since = t; out.push(this.emit(cam, "unresponsive", t, tr.id, tr.box));
+      }
+    }
+    return out;
+  }
+  fallSigns(tr) {
+    const end = tr.lastSeen;
+    const recent = tr.hist.filter((e) => e[0] >= end - CFG.signWindow);
+    const base = tr.hist.filter((e) => e[0] >= end - 4 && e[0] < end - CFG.signWindow);
+    if (base.length < 2 || !recent.length) return false;
+    if (base.filter((e) => e[1] === "upright").length < base.length / 2) return false;
+    const med = (arr) => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)];
+    const bh = med(base.map((e) => e[3])), ba = med(base.map((e) => e[4]));
+    return recent.some((e) => e[1] === "lying") || Math.min(...recent.map((e) => e[3])) <= bh * (1 - CFG.fallDrop) || Math.max(...recent.map((e) => e[4])) >= ba * CFG.widen;
+  }
+  nearBorder(b, s) { if (!s) return false; const mx = s[0] * CFG.border, my = s[1] * CFG.border; return b[0] <= mx || b[1] <= my || b[2] >= s[0] - mx || b[3] >= s[1] - my; }
+  adopt(cam, p, tr, t) {
+    const [cx, cy] = center(p.box);
+    for (const [k, g] of this.tracks) {
+      if (g.cam !== cam || g === tr || g.state !== "fallen" || !g.box || t - g.lastSeen < CFG.lostSec) continue;
+      const [x1, y1, x2, y2] = g.box, mx = (x2 - x1) * 0.5, my = (y2 - y1) * 0.5;
+      if (cx < x1 - mx || cx > x2 + mx || cy < y1 - my || cy > y2 + my) continue;
+      this.tracks.delete(k);
+      if (this.posture(p) !== "upright") { tr.state = "fallen"; tr.since = g.since; tr.anchor = [cx, cy]; tr.anchorSince = g.anchorSince; }
+      return;
+    }
+  }
+  expire(t) {
+    for (const [k, tr] of this.tracks) {
+      const dead = tr.state === "fallen" ? t - tr.lastSeen > settings.immobile + CFG.trackTtl
+        : tr.state === "unresponsive" ? t - Math.max(tr.lastSeen, tr.since) > CFG.unresponsiveKeep
+        : t - tr.lastSeen > CFG.trackTtl;
+      if (dead) this.tracks.delete(k);
+    }
+  }
+  fallen(cam) {
+    const out = [];
+    for (const tr of this.tracks.values()) if (tr.cam === cam && tr.box && (tr.state === "fallen" || tr.state === "unresponsive")) out.push({ box: tr.box, state: tr.state, visible: tr.lastSeen >= this.t - 0.3 });
+    return out;
+  }
+  emit(cam, type, t, id, box, extra = "") {
+    const key = cam + "|" + type + "|" + id, last = this.lastEmit.get(key);
+    if (last != null && t - last < CFG.cooldown) return null;
+    this.lastEmit.set(key, t);
+    const critical = type === "unresponsive";
+    return { cam, type, severity: critical ? "critical" : "danger", message: (critical ? "쓰러진 후 무반응 (중상 의심)" : "쓰러짐 감지") + extra, time: Date.now(), emergency: critical ? "119" : null, box };
+  }
+}
+function center(b) { return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]; }
+function size(b) { return [Math.max(b[2] - b[0], 1e-6), Math.max(b[3] - b[1], 1e-6)]; }
+function torsoAngle(kp) {
+  if (!kp) return null;
+  const sx = (kp[5][0] + kp[6][0]) / 2, sy = (kp[5][1] + kp[6][1]) / 2, hx = (kp[11][0] + kp[12][0]) / 2, hy = (kp[11][1] + kp[12][1]) / 2;
+  const dx = hx - sx, dy = hy - sy; if (!dx && !dy) return null;
+  return Math.atan2(Math.abs(dx), Math.abs(dy)) * 180 / Math.PI;
+}
+const engine = new Engine();
+
+/* =============================================================== 추적기
+   프레임 사이에 같은 사람에게 같은 번호를 붙인다 (겹침 비율 기준) */
+function iou(a, b) {
+  const x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]), x2 = Math.min(a[2], b[2]), y2 = Math.min(a[3], b[3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter + 1e-6);
+}
+class Tracker {
+  constructor() { this.tracks = []; this.next = 1; }
+  reset() { this.tracks = []; }
+  update(dets, t) {
+    this.tracks = this.tracks.filter((tr) => t - tr.t <= 1.0);
+    const pairs = [];
+    dets.forEach((d, i) => this.tracks.forEach((tr, j) => { const v = iou(d.box, tr.box); if (v >= 0.25) pairs.push([v, i, j]); }));
+    pairs.sort((a, b) => b[0] - a[0]);
+    const usedD = new Set(), usedT = new Set();
+    for (const [, i, j] of pairs) {
+      if (usedD.has(i) || usedT.has(j)) continue;
+      usedD.add(i); usedT.add(j); dets[i].id = this.tracks[j].id; this.tracks[j].box = dets[i].box; this.tracks[j].t = t;
+    }
+    dets.forEach((d, i) => { if (!usedD.has(i)) { d.id = this.next++; this.tracks.push({ id: d.id, box: d.box, t }); } });
+    return dets;
+  }
+}
+
+/* ============================================================ AI 실행 (워커) */
+const WORKER_SRC = `
+let session = null;
+self.onmessage = async (e) => {
+  const m = e.data;
+  try {
+    if (m.type === "init") {
+      importScripts(m.ortUrl);
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+      ort.env.wasm.wasmBinary = m.wasm;
+      ort.env.wasm.wasmPaths = { mjs: m.mjsUrl };
+      const model = new Uint8Array(m.model);
+      const create = (ep) => ort.InferenceSession.create(model, { executionProviders: [ep], graphOptimizationLevel: "all" });
+      let ep = "wasm", gpuError = null;
+      if (m.tryGpu && self.navigator && navigator.gpu) {
+        try {
+          if (await navigator.gpu.requestAdapter()) { session = await create("webgpu"); ep = "webgpu"; }
+          else gpuError = "GPU 어댑터 없음";
+        } catch (err) { gpuError = String((err && err.message) || err); session = null; }
+      } else if (m.tryGpu) gpuError = "이 브라우저는 WebGPU 미지원";
+      if (!session) session = await create("wasm");
+      self.postMessage({ type: "ready", ep, gpuError });
+    } else if (m.type === "run") {
+      const t0 = performance.now();
+      const input = new ort.Tensor("float32", new Float32Array(m.data), [1, 3, ${IMG}, ${IMG}]);
+      const res = await session.run({ [session.inputNames[0]]: input });
+      const o = res[session.outputNames[0]];
+      const copy = new Float32Array(o.data);
+      self.postMessage({ type: "result", id: m.id, data: copy.buffer, n: o.dims[2], ms: performance.now() - t0 }, [copy.buffer]);
+    }
+  } catch (err) {
+    self.postMessage({ type: "error", id: m.id, message: String((err && err.message) || err) });
+  }
+};`;
+
+const ai = { workers: [], ms: [], error: null, ep: "" };
+async function startAI() {
+  try {
+    setBadge("load", "AI 모델 받는 중");
+    const [model, wasm] = await Promise.all([fetchGz(MODEL_URL), fetchGz(WASM_URL)]);
+    setBadge("load", "AI 준비 중");
+    const blobUrl = URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" }));
+    const spawn = (tryGpu) => {
+      const w = new Worker(blobUrl), slot = { w, busy: false, cb: null };
+      const ready = new Promise((res, rej) => {
+        w.onmessage = (e) => {
+          const m = e.data;
+          if (m.type === "ready") res(m);
+          else if (m.type === "error" && !slot.cb) rej(new Error(m.message));
+          else if (slot.cb) { const cb = slot.cb; slot.cb = null; slot.busy = false; cb(m); }
+        };
+        w.onerror = (e) => rej(new Error(e.message || "워커 오류"));
+      });
+      w.postMessage({ type: "init", tryGpu, ortUrl: ORT_URL, mjsUrl: ORT_MJS, wasm: wasm.slice(0), model: model.slice(0) });
+      ai.workers.push(slot);
+      return ready;
+    };
+    // 첫 워커로 GPU 사용 가능 여부 확인 → GPU면 2개(전처리와 추론 겹치기), CPU면 코어 수만큼 병렬
+    const first = await spawn(true);
+    ai.ep = first.ep;
+    if (first.gpuError) console.info("WebGPU 사용 불가, CPU로 실행:", first.gpuError);
+    const extra = first.ep === "webgpu" ? 1 : Math.max(0, Math.min(4, (navigator.hardwareConcurrency || 4) - 1) - 1);
+    await Promise.all(Array.from({ length: extra }, () => spawn(first.ep === "webgpu")));
+    state.aiReady = true;
+    setBadge("live", first.ep === "webgpu" ? "AI 분석 중 · GPU" : "AI 분석 중 · CPU");
+    $("aiInfo").textContent = `YOLO11n-pose · 병렬 ${ai.workers.length}개`;
+    renderEvents();
+    schedule();
+  } catch (err) {
+    ai.error = err;
+    setBadge("err", "AI 불러오기 실패");
+    $("aiInfo").textContent = "";
+    toast("AI를 불러오지 못했습니다: " + err.message + " — 영상은 재생되지만 분석은 꺼져 있습니다.", "critical", 9000);
+    console.error(err);
+  }
+}
+async function fetchGz(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url} 다운로드 실패 (${r.status})`);
+  const buf = await r.arrayBuffer(), head = new Uint8Array(buf, 0, 2);
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return buf; // 서버가 이미 압축을 풀어서 보낸 경우
+  if (!("DecompressionStream" in window)) throw new Error("브라우저가 너무 오래되었습니다 (최신 Chrome·Safari·Edge 필요)");
+  return await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+}
+function setBadge(kind, text) { const b = $("aiBadge"); b.className = "badge " + kind; b.textContent = text; }
+
+/* 영상 1장 → 모델 입력 (640×640 레터박스, RGB 0~1, CHW) */
+const prepCanvas = document.createElement("canvas"); prepCanvas.width = prepCanvas.height = IMG;
+const prepCtx = prepCanvas.getContext("2d", { willReadFrequently: true });
+function preprocess(video) {
+  const vw = video.videoWidth, vh = video.videoHeight, s = Math.min(IMG / vw, IMG / vh);
+  const nw = Math.round(vw * s), nh = Math.round(vh * s), px = (IMG - nw) / 2, py = (IMG - nh) / 2;
+  prepCtx.fillStyle = "rgb(114,114,114)"; prepCtx.fillRect(0, 0, IMG, IMG);
+  prepCtx.drawImage(video, px, py, nw, nh);
+  const px8 = prepCtx.getImageData(0, 0, IMG, IMG).data, area = IMG * IMG, out = new Float32Array(3 * area);
+  for (let i = 0, j = 0; i < area; i++, j += 4) { out[i] = px8[j] / 255; out[i + area] = px8[j + 1] / 255; out[i + 2 * area] = px8[j + 2] / 255; }
+  return { data: out, s, px, py, vw, vh };
+}
+/* 모델 출력 [1,56,N] → 사람 박스 + 관절 17개 */
+function decode(buf, n, meta) {
+  const o = new Float32Array(buf), dets = [];
+  for (let i = 0; i < n; i++) {
+    const c = o[4 * n + i]; if (c < settings.conf) continue;
+    const cx = o[i], cy = o[n + i], w = o[2 * n + i], h = o[3 * n + i];
+    const box = [(cx - w / 2 - meta.px) / meta.s, (cy - h / 2 - meta.py) / meta.s, (cx + w / 2 - meta.px) / meta.s, (cy + h / 2 - meta.py) / meta.s];
+    const kp = [], kc = [];
+    for (let k = 0; k < 17; k++) { kp.push([(o[(5 + k * 3) * n + i] - meta.px) / meta.s, (o[(6 + k * 3) * n + i] - meta.py) / meta.s]); kc.push(o[(7 + k * 3) * n + i]); }
+    dets.push({ box, conf: c, kp, kc });
+  }
+  dets.sort((a, b) => b.conf - a.conf);
+  const keep = [];
+  for (const d of dets) if (keep.every((k) => iou(k.box, d.box) < 0.7)) keep.push(d);
+  for (const d of keep) {
+    d.box = [Math.max(0, d.box[0]), Math.max(0, d.box[1]), Math.min(meta.vw, d.box[2]), Math.min(meta.vh, d.box[3])];
+    if (![5, 6, 11, 12].every((k) => d.kc[k] >= 0.5)) d.kp = null; // 몸통 관절이 확실할 때만 자세 판단에 사용
+  }
+  return keep;
+}
+
+/* 비어 있는 워커에 '가장 오래 분석 안 된' 카메라를 배정 */
+function schedule() {
+  if (!state.aiReady) return;
+  for (const slot of ai.workers) {
+    if (slot.busy || !state.aiOn) continue;
+    const cam = state.cams.filter((c) => !c.inflight && c.video.readyState >= 2 && !c.video.paused).sort((a, b) => a.lastRun - b.lastRun)[0];
+    if (!cam) break;
+    runOn(slot, cam);
+  }
+}
+function runOn(slot, cam) {
+  cam.inflight = true; slot.busy = true;
+  const t = now(), meta = preprocess(cam.video), loopId = cam.loopId;
+  slot.cb = (m) => {
+    cam.inflight = false; cam.lastRun = now();
+    if (m.type === "result" && loopId === cam.loopId) {
+      ai.ms.push(m.ms); if (ai.ms.length > 40) ai.ms.shift();
+      cam.runs.push(now()); if (cam.runs.length > 20) cam.runs.shift();
+      const persons = cam.tracker.update(decode(m.data, m.n, meta), t);
+      cam.persons = persons;
+      for (const ev of engine.update(cam.id, persons, t, [meta.vw, meta.vh])) addEvent(ev);
+    } else if (m.type === "error") console.warn("분석 오류", m.message);
+    setTimeout(schedule, 0);
+  };
+  slot.w.postMessage({ type: "run", id: cam.id, data: meta.data.buffer }, [meta.data.buffer]);
+}
+
+/* ============================================================== 카메라 */
+function addCamera(name, src, isUser) {
+  const video = document.createElement("video");
+  video.muted = true; video.loop = true; video.playsInline = true; video.autoplay = true; video.preload = "auto";
+  video.src = src;
+  const cam = { id: "cam" + (state.cams.length + 1), name, video, isUser, persons: [], tracker: new Tracker(), inflight: false, lastRun: 0, runs: [], loopId: 0, lastTime: 0, alert: null };
+  video.addEventListener("timeupdate", () => {
+    if (video.currentTime + 0.5 < cam.lastTime) resetCam(cam); // 반복 재생으로 처음으로 돌아감
+    cam.lastTime = video.currentTime;
+  });
+  video.addEventListener("canplay", () => { video.play().catch(() => {}); schedule(); }, { once: true });
+  state.cams.push(cam);
+  return cam;
+}
+function resetCam(cam) { cam.loopId++; cam.persons = []; cam.tracker.reset(); engine.reset(cam.id); cam.alert = null; }
+
+/* ============================================================== 화면 그리기 */
+const views = new Set(); // {canvas, cam}
+function makeView(cam) { const c = document.createElement("canvas"); const v = { canvas: c, cam }; views.add(v); return v; }
+function drawView(v) {
+  const { canvas, cam } = v, rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), W = Math.max(1, Math.round(rect.width * dpr)), H = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext("2d"), vid = cam.video;
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  if (vid.readyState < 2) return;
+  const s = Math.min(W / vid.videoWidth, H / vid.videoHeight), ox = (W - vid.videoWidth * s) / 2, oy = (H - vid.videoHeight * s) / 2;
+  ctx.drawImage(vid, ox, oy, vid.videoWidth * s, vid.videoHeight * s);
+  const X = (x) => ox + x * s, Y = (y) => oy + y * s, lw = Math.max(1.5, 2 * dpr), fs = Math.max(10, Math.round(12 * dpr));
+  ctx.font = `700 ${fs}px system-ui, sans-serif`; ctx.lineWidth = lw;
+  const fallen = engine.fallen(cam.id);
+  for (const p of cam.persons) {
+    const f = fallen.find((g) => g.visible && iou(g.box, p.box) > 0.3);
+    const color = f ? (f.state === "unresponsive" ? "#ef4444" : "#fb923c") : "#22c55e";
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.strokeRect(X(p.box[0]), Y(p.box[1]), (p.box[2] - p.box[0]) * s, (p.box[3] - p.box[1]) * s);
+    ctx.fillText(`#${p.id}`, X(p.box[0]) + 2, Y(p.box[1]) - 4);
+    if (p.kp) for (const k of [5, 6, 11, 12]) { ctx.beginPath(); ctx.arc(X(p.kp[k][0]), Y(p.kp[k][1]), 2.5 * dpr, 0, 7); ctx.fill(); }
+  }
+  for (const g of fallen) {
+    if (g.visible) continue;
+    const color = g.state === "unresponsive" ? "#ef4444" : "#fb923c";
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.setLineDash([6 * dpr, 4 * dpr]);
+    ctx.strokeRect(X(g.box[0]), Y(g.box[1]), (g.box[2] - g.box[0]) * s, (g.box[3] - g.box[1]) * s);
+    ctx.setLineDash([]);
+    ctx.fillText(g.state === "unresponsive" ? "NO MOTION" : "FALL?", X(g.box[0]) + 2, Y(g.box[1]) - 4);
+  }
+}
+function renderLoop() {
+  for (const v of views) { if (!v.canvas.isConnected) { views.delete(v); continue; } drawView(v); }
+  requestAnimationFrame(renderLoop);
+}
+
+/* =============================================================== 그리드 */
+const pageSize = () => state.cols * state.rows;
+const pageCount = () => Math.max(1, Math.ceil(state.cams.length / pageSize()));
+function setLayout(c, r) {
+  c = Math.min(6, Math.max(1, c | 0)); r = Math.min(6, Math.max(1, r | 0));
+  const first = state.page * pageSize(); state.cols = c; state.rows = r; state.page = Math.floor(first / pageSize());
+  store.set("cctv.layout", { cols: c, rows: r }); renderGrid();
+}
+function renderGrid() {
+  const g = $("grid"); state.page = Math.min(state.page, pageCount() - 1);
+  g.style.gridTemplateColumns = `repeat(${state.cols},minmax(0,1fr))`; g.style.gridTemplateRows = `repeat(${state.rows},minmax(0,1fr))`;
+  g.replaceChildren();
+  const start = state.page * pageSize();
+  for (let i = 0; i < pageSize(); i++) {
+    const cam = state.cams[start + i];
+    if (!cam) { const t = el("div", "tile empty", "빈 화면 — 위의 ＋ 버튼으로 영상 추가"); g.appendChild(t); continue; }
+    const t = el("div", "tile"); t.dataset.cam = cam.id;
+    t.appendChild(makeView(cam).canvas);
+    t.appendChild(el("div", "tile-name", cam.name));
+    const fps = el("div", "tile-fps mono", ""); fps.dataset.fps = cam.id; t.appendChild(fps);
+    const a = el("div", "tile-alert"); a.hidden = true; t.appendChild(a);
+    t.addEventListener("click", () => openViewer(start + i));
+    g.appendChild(t);
+  }
+  $("pageInfo").textContent = `${state.page + 1} / ${pageCount()}`;
+  document.querySelectorAll("[data-layout]").forEach((b) => b.classList.toggle("on", b.dataset.layout === `${state.cols}x${state.rows}`));
+  $("cols").value = state.cols; $("rows").value = state.rows;
+  refreshTiles();
+}
+function changePage(d) { state.page = (state.page + d + pageCount()) % pageCount(); renderGrid(); }
+function camFps(cam) { const r = cam.runs.filter((x) => now() - x < 3); return r.length > 1 ? (r.length - 1) / (r[r.length - 1] - r[0]) : 0; }
+function refreshTiles() {
+  document.querySelectorAll(".tile[data-cam]").forEach((t) => {
+    const cam = state.cams.find((c) => c.id === t.dataset.cam); if (!cam) return;
+    const a = cam.alert && cam.alert.until > Date.now() ? cam.alert : null, box = t.querySelector(".tile-alert");
+    if (a) { t.dataset.level = a.level; box.textContent = a.message; box.hidden = false; } else { delete t.dataset.level; box.hidden = true; }
+    const f = t.querySelector("[data-fps]");
+    f.textContent = !state.aiReady ? "" : !state.aiOn ? "AI 꺼짐" : `AI ${camFps(cam).toFixed(1)}fps`;
+  });
+  if (ai.ms.length) $("aiInfo").textContent = `YOLO11n-pose · ${ai.ep === "webgpu" ? "GPU" : "CPU"} ${ai.workers.length}개 · 1장 ${Math.round(ai.ms.reduce((a, b) => a + b, 0) / ai.ms.length)}ms`;
+}
+
+/* ============================================================= 확대 보기 */
+function openViewer(i) { state.viewer = i; $("viewer").hidden = false; renderViewer(); }
+function closeViewer() { state.viewer = null; $("viewer").hidden = true; $("stage").replaceChildren(); }
+function renderViewer() {
+  const cam = state.cams[state.viewer]; if (!cam) return closeViewer();
+  $("vName").textContent = cam.name; $("vIndex").textContent = `${state.viewer + 1} / ${state.cams.length}`;
+  $("stage").replaceChildren(makeView(cam).canvas);
+}
+function moveViewer(d) {
+  if (state.viewer == null) return;
+  const st = $("stage"); st.classList.add(d > 0 ? "out-l" : "out-r");
+  setTimeout(() => { state.viewer = (state.viewer + d + state.cams.length) % state.cams.length; renderViewer(); st.classList.remove("out-l", "out-r"); }, 140);
+}
+
+/* =============================================================== 이벤트 */
+function addEvent(ev) {
+  state.events.unshift(ev); state.events = state.events.slice(0, 100);
+  const cam = state.cams.find((c) => c.id === ev.cam);
+  if (cam) cam.alert = { level: ev.severity, message: ev.message, until: Date.now() + (ev.severity === "critical" ? 60000 : 20000) };
+  renderEvents(); refreshTiles();
+  if (ev.severity !== "critical") toast(`${cam ? cam.name : ev.cam} · ${ev.message}`, ev.severity);
+  if (ev.emergency) openIncident(ev);
+}
+function renderEvents() {
+  const list = $("eventList"); list.replaceChildren();
+  if (!state.events.length) {
+    list.appendChild(el("li", "empty-msg", state.aiReady ? "AI가 영상을 분석하고 있습니다. 쓰러짐이 감지되면 여기에 표시됩니다." : "AI 모델을 불러오는 중입니다…"));
+    return;
+  }
+  for (const ev of state.events) {
+    const cam = state.cams.find((c) => c.id === ev.cam);
+    const li = el("li", "ev " + ev.severity), top = el("div", "ev-top");
+    top.append(el("span", null, cam ? cam.name : ev.cam), el("span", "mono", new Date(ev.time).toLocaleTimeString("en-GB", { hour12: false })));
+    li.append(top, el("div", "ev-msg", ev.message));
+    if (ev.note) li.appendChild(el("div", "ev-sub", ev.note));
+    li.addEventListener("click", () => { const i = state.cams.indexOf(cam); if (i >= 0) openViewer(i); });
+    list.appendChild(li);
+  }
+}
+
+/* ============================================================ 긴급 신고 */
+function openIncident(ev) {
+  if (state.incidents.some((x) => x.status === "pending" && x.ev.cam === ev.cam)) return; // 같은 카메라는 하나로 묶음
+  state.incidents.push({ id: state.nextIncident++, ev, status: "pending", deadline: Date.now() + settings.countdown * 1000, total: settings.countdown * 1000 });
+  renderIncident();
+}
+let shownId = null;
+function renderIncident() {
+  const pending = state.incidents.filter((x) => x.status === "pending");
+  if (!pending.length) { $("emg").hidden = true; shownId = null; $("emgFeed").replaceChildren(); return; }
+  const inc = pending[0], cam = state.cams.find((c) => c.id === inc.ev.cam);
+  $("emg").hidden = false;
+  if (shownId !== inc.id) {
+    shownId = inc.id;
+    $("emgMsg").textContent = inc.ev.message;
+    $("emgCam").textContent = `${cam ? cam.name : ""} · ${new Date(inc.ev.time).toLocaleTimeString("en-GB", { hour12: false })}`;
+    $("emgFeed").replaceChildren(cam ? makeView(cam).canvas : el("div"));
+  }
+  $("emgQueue").textContent = pending.length > 1 ? `· 대기 중 ${pending.length - 1}건 더` : "";
+  tickIncident();
+}
+function tickIncident() {
+  for (const inc of state.incidents) if (inc.status === "pending" && Date.now() >= inc.deadline) resolve(inc, "dispatched", "자동");
+  const inc = state.incidents.find((x) => x.id === shownId);
+  if (!inc || inc.status !== "pending") return;
+  const left = Math.max(0, inc.deadline - Date.now());
+  $("emgSec").textContent = Math.ceil(left / 1000); $("emgBar").style.width = (left / inc.total * 100) + "%";
+}
+function resolve(inc, status, by) {
+  if (inc.status !== "pending") return;
+  inc.status = status;
+  const cam = state.cams.find((c) => c.id === inc.ev.cam), name = cam ? cam.name : "";
+  if (status === "dispatched") {
+    toast(`☎ 119 신고 발송 (${by}, 시연) · ${name}`, "critical");
+    state.events.unshift({ cam: inc.ev.cam, severity: "critical", message: `119 신고 발송 — ${by} (시연, 실제 발송 안 됨)`, time: Date.now(), note: "현장 주소·카메라 위치·발생 시각 포함" });
+  } else {
+    toast(`신고 취소 (오탐 처리) · ${name}`, "ok");
+    state.events.unshift({ cam: inc.ev.cam, severity: "ok", message: "관리자가 오탐으로 신고 취소", time: Date.now() });
+  }
+  renderEvents(); renderIncident();
+}
+
+function toast(text, level = "info", ms = 5000) { const t = el("div", "toast " + level, text); $("toasts").appendChild(t); setTimeout(() => t.remove(), ms); }
+
+/* =============================================================== 설정 */
+function bindSettings() {
+  const map = [["sConf", "vConf", "conf", (v) => v.toFixed(2)], ["sConfirm", "vConfirm", "confirm", (v) => v.toFixed(1) + "초"], ["sImmobile", "vImmobile", "immobile", (v) => v + "초"], ["sCountdown", "vCountdown", "countdown", (v) => v + "초"]];
+  const sync = () => map.forEach(([s, v, k, f]) => { $(s).value = settings[k]; $(v).textContent = f(settings[k]); });
+  map.forEach(([s, v, k, f]) => $(s).addEventListener("input", () => { settings[k] = +$(s).value; $(v).textContent = f(settings[k]); store.set("cctv.settings", settings); }));
+  $("resetSettings").addEventListener("click", () => { Object.assign(settings, DEFAULTS); store.set("cctv.settings", settings); sync(); toast("감지 설정을 기본값으로 되돌렸습니다", "ok"); });
+  sync();
+}
+
+/* =============================================================== 초기화 */
+function bindUI() {
+  document.querySelectorAll("[data-layout]").forEach((b) => b.addEventListener("click", () => { const [c, r] = b.dataset.layout.split("x").map(Number); setLayout(c, r); }));
+  $("applyLayout").addEventListener("click", () => setLayout(+$("cols").value, +$("rows").value));
+  $("prevPage").addEventListener("click", () => changePage(-1));
+  $("nextPage").addEventListener("click", () => changePage(1));
+  $("vClose").addEventListener("click", closeViewer);
+  $("vPrev").addEventListener("click", () => moveViewer(-1));
+  $("vNext").addEventListener("click", () => moveViewer(1));
+  $("emgCancel").addEventListener("click", () => { const i = state.incidents.find((x) => x.id === shownId); if (i) resolve(i, "cancelled", "관리자"); });
+  $("emgConfirm").addEventListener("click", () => { const i = state.incidents.find((x) => x.id === shownId); if (i) resolve(i, "dispatched", "관리자"); });
+  $("addVideo").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", (e) => {
+    const files = [...e.target.files]; if (!files.length) return;
+    for (const f of files) addCamera("내 영상 — " + f.name, URL.createObjectURL(f), true);
+    state.page = pageCount() - 1; renderGrid(); toast(`영상 ${files.length}개를 추가했습니다. AI가 바로 분석을 시작합니다.`, "ok");
+    e.target.value = "";
+  });
+  $("restart").addEventListener("click", () => { for (const c of state.cams) { c.video.currentTime = 0; resetCam(c); c.video.play().catch(() => {}); } toast("모든 영상을 처음부터 다시 재생합니다", "ok"); });
+  $("aiToggle").addEventListener("click", () => {
+    state.aiOn = !state.aiOn; const b = $("aiToggle");
+    b.classList.toggle("on", state.aiOn); b.setAttribute("aria-pressed", state.aiOn); b.textContent = state.aiOn ? "AI 분석 켜짐" : "AI 분석 꺼짐";
+    if (state.aiOn) schedule();
+  });
+  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+    ["events", "settings", "help"].forEach((n) => { $("pane-" + n).hidden = n !== b.dataset.tab; });
+  }));
+  document.addEventListener("keydown", (e) => {
+    if (e.target.matches("input,select") || !$("emg").hidden) return;
+    if (state.viewer != null) { if (e.key === "Escape") closeViewer(); if (e.key === "ArrowLeft") moveViewer(-1); if (e.key === "ArrowRight") moveViewer(1); }
+    else { if (e.key === "ArrowLeft") changePage(-1); if (e.key === "ArrowRight") changePage(1); }
+  });
+  let sx = null; const st = $("stage");
+  st.addEventListener("pointerdown", (e) => { sx = e.clientX; });
+  st.addEventListener("pointerup", (e) => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 50) moveViewer(dx < 0 ? 1 : -1); });
+}
+
+function init() {
+  bindUI(); bindSettings();
+  const l = store.get("cctv.layout", { cols: 2, rows: 2 }); state.cols = l.cols; state.rows = l.rows;
+  // 브라우저가 재생할 수 있는 형식 선택 (H.264 MP4 우선, 안 되면 WebM)
+  const ext = document.createElement("video").canPlayType('video/mp4; codecs="avc1.42E01E"') ? ".mp4" : ".webm";
+  for (const s of SAMPLES) addCamera(s.name, s.src + ext, false);
+  renderGrid(); renderEvents();
+  setInterval(refreshTiles, 500); setInterval(tickIncident, 250);
+  requestAnimationFrame(renderLoop);
+  startAI();
+  window.__cctv = { state, engine, ai }; // 점검용
+}
+init();
+})();
+</script>
