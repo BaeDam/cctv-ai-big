@@ -36,9 +36,10 @@ class Detector:
         pose_model: str = "yolo11n-pose.pt",
         helmet_model: str | None = None,
         fire_model: str | None = None,
-        conf: float = 0.4,
+        conf: float = 0.25,
         kp_conf: float = 0.5,
         device: str = "auto",
+        imgsz: int = 640,
     ):
         from ultralytics import YOLO  # 무거운 의존성이라 실제 사용할 때만 import
 
@@ -48,13 +49,24 @@ class Detector:
         self.conf = conf
         self.kp_conf = kp_conf
         self.device = pick_device(device)
+        self.imgsz = imgsz
+        self._warmup()
+
+    def _warmup(self) -> None:
+        """첫 추론은 느리므로(모델 로딩·최적화) 시작할 때 미리 한 번 돌려둔다."""
+        import numpy as np
+
+        dummy = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.uint8)
+        for model in (self.pose, self.helmet, self.fire):
+            if model is not None:
+                model.predict(dummy, imgsz=self.imgsz, device=self.device, verbose=False)
 
     def detect(self, frame, camera_id: str, ts: float) -> FrameResult:
-        result = FrameResult(camera_id=camera_id, timestamp=ts)
+        result = FrameResult(camera_id=camera_id, timestamp=ts, frame_size=(frame.shape[1], frame.shape[0]))
 
         r = self.pose.track(
             frame, persist=True, classes=[0], conf=self.conf, tracker="bytetrack.yaml",
-            device=self.device, verbose=False,
+            imgsz=self.imgsz, device=self.device, verbose=False,
         )[0]
         if r.boxes is not None and r.boxes.id is not None:
             boxes = r.boxes.xyxy.cpu().numpy()
@@ -76,7 +88,7 @@ class Detector:
             self._apply_helmet(frame, result.persons)
 
         if self.fire is not None:
-            fr = self.fire(frame, conf=self.conf, device=self.device, verbose=False)[0]
+            fr = self.fire(frame, conf=self.conf, imgsz=self.imgsz, device=self.device, verbose=False)[0]
             names = {int(c): fr.names[int(c)].lower() for c in fr.boxes.cls.tolist()}
             labels = set(names.values())
             result.fire = "fire" in labels
@@ -84,7 +96,7 @@ class Detector:
         return result
 
     def _apply_helmet(self, frame, persons: list[Person]) -> None:
-        hr = self.helmet(frame, conf=self.conf, device=self.device, verbose=False)[0]
+        hr = self.helmet(frame, conf=self.conf, imgsz=self.imgsz, device=self.device, verbose=False)[0]
         dets = [
             (hr.names[int(c)].lower(), b)
             for c, b in zip(hr.boxes.cls.tolist(), hr.boxes.xyxy.cpu().numpy().tolist())

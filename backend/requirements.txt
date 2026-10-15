@@ -4,3 +4,4 @@ pyyaml>=6.0
 # AI 분석 (실제 카메라 영상을 분석할 때 필요, 데모 화면만 볼 때는 생략 가능)
 ultralytics>=8.3
 opencv-python>=4.9
+lap>=0.5         # 사람 추적(ByteTrack)에 필요

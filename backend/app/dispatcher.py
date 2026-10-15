@@ -129,13 +129,13 @@ class EmergencyDispatcher:
     def escalate(self, event: Event) -> Incident | None:
         if not event.emergency:
             return None
-        # 같은 카메라·같은 대상(사람)으로 이미 대기 중인 사건이 있으면 새로 만들지 않음
+        # 같은 카메라·같은 종류로 이미 대기 중인 사건이 있으면 새로 만들지 않음
+        # (쓰러진 사람은 AI 추적 번호가 바뀌기 쉬워서 사람 단위가 아니라 카메라 단위로 묶는다)
         for inc in self.incidents.values():
             if (
                 inc.status == IncidentStatus.PENDING
                 and inc.event.camera_id == event.camera_id
                 and inc.event.type == event.type
-                and inc.event.track_id == event.track_id
             ):
                 return inc
         now = self.clock()

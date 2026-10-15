@@ -8,7 +8,10 @@ models:
   pose: "yolo11n-pose.pt"   # 첫 실행 시 자동 다운로드
   helmet: null              # 예: "models/helmet.pt" (클래스: helmet / head)
   fire: null                # 예: "models/fire.pt"   (클래스: fire / smoke)
-  fps: 5                    # 카메라별 초당 분석 프레임
+  fps: 0                    # 카메라별 초당 분석 프레임 상한. 0 = 장비가 허용하는 최대 속도
+  display_fps: 15           # 화면에 보내는 영상 프레임 (분석 속도와 별개)
+  conf: 0.25                # 사람 인식 최소 신뢰도. 낮을수록 쓰러진 사람처럼 애매한 자세도 잡지만 오인식 증가
+  imgsz: 640                # AI 입력 크기. 작을수록 빠름 (480, 416, 320). 멀리 있는 사람은 놓칠 수 있음
   device: auto              # auto: NVIDIA GPU → 맥 GPU(mps) → CPU 순으로 자동 선택
 
 # source: RTSP 주소, 영상 파일 경로, 웹캠 번호(0). 비워두면 화면에 데모 영상 표시
@@ -34,8 +37,9 @@ zones:
     크레인 작업반경: [[200, 300], [600, 300], [640, 480], [160, 480]]
 
 situation:
-  confirm_sec: 1.5      # 쓰러짐 의심 → 확정
-  immobile_sec: 10      # 쓰러진 뒤 이 시간 동안 움직임 없으면 긴급(119)
+  confirm_sec: 1.0      # 쓰러짐 의심 → 확정
+  lying_confirm_sec: 3  # 넘어지는 순간을 놓쳤을 때, 누운 상태가 이만큼 지속되면 쓰러짐
+  immobile_sec: 8       # 쓰러진 뒤 이 시간 동안 움직임 없으면 긴급(119)
   fire_confirm_frames: 5
   helmet_confirm_frames: 10
   event_cooldown_sec: 60

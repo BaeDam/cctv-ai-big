@@ -61,8 +61,9 @@ def test_operator_confirm_dispatches_immediately():
 
 def test_duplicate_pending_event_reuses_incident():
     d = make(RecordingChannel(), Clock())
-    assert d.escalate(critical()) is d.escalate(critical())
-    assert d.escalate(critical(track_id=2)) is not d.escalate(critical())
+    first = d.escalate(critical())
+    assert d.escalate(critical()) is first
+    assert d.escalate(critical(track_id=2)) is first  # 추적 번호가 바뀌어도 같은 카메라면 같은 사건
 
 
 def test_non_emergency_event_is_ignored():

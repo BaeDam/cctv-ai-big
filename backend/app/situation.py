@@ -75,6 +75,7 @@ class FrameResult:
     persons: list[Person] = field(default_factory=list)
     fire: bool = False
     smoke: bool = False
+    frame_size: tuple[int, int] | None = None  # (가로, 세로) 픽셀, 화면 가장자리 판단용
 
 
 @dataclass
@@ -106,14 +107,21 @@ class SituationConfig:
     upright_aspect: float = 0.8  # w/h 가 이보다 작으면 서 있음
     lying_aspect: float = 1.2  # w/h 가 이보다 크면 누워 있음
     torso_lying_deg: float = 60.0  # 몸통이 수직에서 이 각도 이상 기울면 누움
+    torso_upright_deg: float = 30.0  # 몸통이 이 각도 이하면 서 있음
     fall_window_sec: float = 1.0  # 이 시간 안에 서 있다가 누우면 '쓰러짐'
     fall_drop_ratio: float = 0.25  # 무게중심 하강량 / 서 있을 때 키
-    confirm_sec: float = 1.5  # 쓰러짐 의심 → 확정
+    confirm_sec: float = 1.0  # 쓰러짐 의심 → 확정
+    lying_confirm_sec: float = 3.0  # 넘어지는 순간을 못 봤을 때, 누운 상태가 이만큼 지속되면 쓰러짐
     immobile_sec: float = 10.0  # 쓰러짐 확정 → 무반응(긴급)
     motion_ratio: float = 0.08  # 이동량 / 박스 대각선 이 값 미만이면 '움직임 없음'
     helmet_confirm_frames: int = 10
     fire_confirm_frames: int = 5
     track_ttl_sec: float = 5.0  # 이 시간 동안 안 보이면 추적 상태 삭제
+    unresponsive_keep_sec: float = 60.0  # 무반응 판정된 사람의 위치를 화면에 표시하는 시간
+    lost_sec: float = 0.6  # 이 시간 동안 인식이 끊기면 '사라짐'으로 본다
+    fall_sign_window_sec: float = 1.2  # 사라지기 직전 이 시간 안에 넘어지는 동작이 있었는지 본다
+    fall_widen_ratio: float = 1.35  # 박스 가로/세로 비율이 평소보다 이 배 이상 커지면 넘어지는 동작
+    border_ratio: float = 0.03  # 화면 가장자리 이 비율 안에서 사라지면 걸어 나간 것으로 본다
     event_cooldown_sec: float = 60.0  # 같은 이벤트 반복 알림 간격
 
 
@@ -126,12 +134,16 @@ class _TrackState(str, Enum):
 
 @dataclass
 class _Track:
-    history: deque  # (t, aspect, cy, height)
+    history: deque  # (t, posture, cy, height, aspect)
     state: _TrackState = _TrackState.NORMAL
     state_since: float = 0.0
     anchor: Point | None = None  # 쓰러진 뒤 움직임 기준점
     anchor_since: float = 0.0
+    lying_since: float | None = None
     last_seen: float = 0.0
+    last_bbox: BBox | None = None
+    born_at: Point | None = None  # 처음 인식된 위치
+    lost_checked: bool = False
     no_helmet_frames: int = 0
     zones_inside: set = field(default_factory=set)
 
@@ -186,28 +198,51 @@ class SituationEngine:
         self._tracks: dict[tuple[str, int], _Track] = {}
         self._fire_frames: dict[tuple[str, EventType], int] = {}
         self._last_emit: dict[tuple, float] = {}
+        self._now = 0.0
 
     # ------------------------------------------------------------------ public
     def update(self, frame: FrameResult) -> list[Event]:
         events: list[Event] = []
         now = frame.timestamp
+        self._now = now
         for person in frame.persons:
             events += self._update_person(frame.camera_id, person, now)
+        events += self._check_lost(frame, now)
         events += self._update_fire(frame, now)
         self._expire_tracks(now)
         return events
+
+    def fallen_boxes(self, camera_id: str) -> list[tuple[BBox, str, bool]]:
+        """화면 표시용: 쓰러진 사람의 (마지막 위치, 상태, 현재 AI 인식 중인지)."""
+        out = []
+        for (c, _), t in self._tracks.items():
+            if c == camera_id and t.last_bbox and t.state in (_TrackState.FALLEN, _TrackState.UNRESPONSIVE):
+                out.append((t.last_bbox, t.state.value, t.last_seen >= self._now - 0.3))
+        return out
 
     def track_state(self, camera_id: str, track_id: int) -> str | None:
         t = self._tracks.get((camera_id, track_id))
         return t.state.value if t else None
 
     # ----------------------------------------------------------------- persons
-    def _is_lying(self, person: Person) -> bool:
+    def _posture(self, person: Person) -> str:
+        """'upright'(서 있음) / 'lying'(누움) / 'other'(앉음·숙임 등 애매)"""
+        cfg = self.cfg
         w, h = _size(person.bbox)
+        aspect = w / h
         angle = _torso_angle(person.keypoints)
         if angle is not None:
-            return angle >= self.cfg.torso_lying_deg
-        return w / h >= self.cfg.lying_aspect
+            # 포즈 키포인트가 있으면 몸통 각도가 우선 (팔을 벌려 박스가 넓어져도 오판하지 않음)
+            if angle >= cfg.torso_lying_deg:
+                return "lying"
+            if angle <= cfg.torso_upright_deg and aspect < 1.0:
+                return "upright"
+            return "other"
+        if aspect >= cfg.lying_aspect:
+            return "lying"
+        if aspect < cfg.upright_aspect:
+            return "upright"
+        return "other"
 
     def _update_person(self, cam: str, person: Person, now: float) -> list[Event]:
         cfg = self.cfg
@@ -217,29 +252,37 @@ class SituationEngine:
             track = _Track(history=deque(maxlen=120), state_since=now)
             self._tracks[key] = track
         track.last_seen = now
+        track.last_bbox = person.bbox
+        track.lost_checked = False
+        if track.born_at is None:
+            track.born_at = _center(person.bbox)
+            self._adopt_ghost(cam, person, track, now)
 
         w, h = _size(person.bbox)
         cx, cy = _center(person.bbox)
-        aspect = w / h
-        track.history.append((now, aspect, cy, h))
-        lying = self._is_lying(person)
+        posture = self._posture(person)
+        lying = posture == "lying"
+        track.history.append((now, posture, cy, h, w / h))
+        track.lying_since = (track.lying_since or now) if lying else None
         events: list[Event] = []
 
         # 다시 일어서면 어느 단계든 정상으로 복귀
-        if not lying and aspect < cfg.upright_aspect and track.state != _TrackState.NORMAL:
+        if posture == "upright" and track.state != _TrackState.NORMAL:
             track.state, track.state_since, track.anchor = _TrackState.NORMAL, now, None
 
-        if track.state == _TrackState.NORMAL:
-            if lying and self._fell_recently(track, now, cy):
+        if track.state == _TrackState.NORMAL and lying:
+            if self._fell_recently(track, now, cy):
                 track.state, track.state_since = _TrackState.FALL_SUSPECT, now
+            elif now - track.lying_since >= cfg.lying_confirm_sec:
+                # 넘어지는 순간을 놓쳤어도(가려짐, 추적 ID 바뀜, 화면 밖에서 넘어짐)
+                # 바닥에 누운 상태가 계속되면 쓰러진 것으로 본다
+                events.append(self._to_fallen(cam, person, track, now, " (누운 상태 지속)"))
 
         elif track.state == _TrackState.FALL_SUSPECT:
             if not lying:
                 track.state, track.state_since = _TrackState.NORMAL, now
             elif now - track.state_since >= cfg.confirm_sec:
-                track.state, track.state_since = _TrackState.FALLEN, now
-                track.anchor, track.anchor_since = (cx, cy), now
-                events.append(self._event(cam, EventType.FALL, Severity.DANGER, now, person))
+                events.append(self._to_fallen(cam, person, track, now))
 
         elif track.state == _TrackState.FALLEN:
             diag = math.hypot(w, h)
@@ -257,12 +300,17 @@ class SituationEngine:
         events += self._check_zones(cam, person, track, now)
         return [e for e in events if e is not None]
 
+    def _to_fallen(self, cam, person, track, now, extra="") -> Event | None:
+        track.state, track.state_since = _TrackState.FALLEN, now
+        track.anchor, track.anchor_since = _center(person.bbox), now
+        return self._event(cam, EventType.FALL, Severity.DANGER, now, person, extra=extra)
+
     def _fell_recently(self, track: _Track, now: float, cy_now: float) -> bool:
         """fall_window_sec 안에 '서 있던' 기록이 있고, 그때보다 무게중심이 충분히 내려갔는가."""
-        for t, aspect, cy, h in track.history:
+        for t, posture, cy, h, _ in track.history:
             if now - t > self.cfg.fall_window_sec:
                 continue
-            if aspect < self.cfg.upright_aspect and (cy_now - cy) >= self.cfg.fall_drop_ratio * h:
+            if posture == "upright" and (cy_now - cy) >= self.cfg.fall_drop_ratio * h:
                 return True
         return False
 
@@ -305,8 +353,86 @@ class SituationEngine:
 
     # ----------------------------------------------------------------- helpers
     def _expire_tracks(self, now: float) -> None:
-        for key in [k for k, t in self._tracks.items() if now - t.last_seen > self.cfg.track_ttl_sec]:
+        cfg = self.cfg
+
+        def expired(t: _Track) -> bool:
+            if t.state == _TrackState.FALLEN:
+                # 쓰러진 사람은 인식이 끊겨도 무반응 판정이 끝날 때까지 기억한다
+                return now - t.last_seen > cfg.immobile_sec + cfg.track_ttl_sec
+            if t.state == _TrackState.UNRESPONSIVE:
+                # 무반응 판정 후에도 화면에 위치를 계속 보여준다
+                return now - max(t.last_seen, t.state_since) > cfg.unresponsive_keep_sec
+            return now - t.last_seen > cfg.track_ttl_sec
+
+        for key in [k for k, t in self._tracks.items() if expired(t)]:
             del self._tracks[key]
+
+    # ------------------------------------------------------- 인식이 끊긴 사람
+    def _check_lost(self, frame: FrameResult, now: float) -> list[Event]:
+        """쓰러진 사람은 AI 모델이 잘 인식하지 못한다 (학습 데이터에 누운 사람이 적음).
+        그래서 '넘어지는 동작 직후 화면 가운데서 인식이 끊김'도 쓰러짐으로 보고,
+        쓰러진 뒤 인식이 끊긴 사람은 움직임을 확인할 수 없으므로 무반응 시간을 계속 센다."""
+        cfg = self.cfg
+        cam = frame.camera_id
+        seen = {p.track_id for p in frame.persons}
+        events = []
+        for (c, tid), tr in list(self._tracks.items()):
+            if c != cam or tid in seen or tr.last_bbox is None:
+                continue
+            if now - tr.last_seen < cfg.lost_sec:
+                continue
+            ghost = Person(tid, tr.last_bbox)
+            if tr.state in (_TrackState.NORMAL, _TrackState.FALL_SUSPECT) and not tr.lost_checked:
+                tr.lost_checked = True
+                if not self._near_border(tr.last_bbox, frame.frame_size) and self._fall_signs(tr):
+                    events.append(self._to_fallen(cam, ghost, tr, now, " (넘어진 뒤 인식 끊김)"))
+            elif tr.state == _TrackState.FALLEN and now - tr.anchor_since >= cfg.immobile_sec:
+                tr.state, tr.state_since = _TrackState.UNRESPONSIVE, now
+                events.append(self._event(cam, EventType.UNRESPONSIVE, Severity.CRITICAL, now, ghost))
+        return [e for e in events if e is not None]
+
+    def _fall_signs(self, tr: _Track) -> bool:
+        """사라지기 직전에 넘어지는 동작(누움, 키 급감, 박스가 옆으로 넓어짐)이 있었는가."""
+        cfg = self.cfg
+        end = tr.last_seen
+        recent = [e for e in tr.history if e[0] >= end - cfg.fall_sign_window_sec]
+        base = [e for e in tr.history if end - 4.0 <= e[0] < end - cfg.fall_sign_window_sec]
+        if len(base) < 2 or not recent:
+            return False
+        if sum(e[1] == "upright" for e in base) < len(base) / 2:
+            return False  # 원래 서 있던 사람이 아니면 판단하지 않음
+        base_h = sorted(e[3] for e in base)[len(base) // 2]
+        base_aspect = sorted(e[4] for e in base)[len(base) // 2]
+        lying = any(e[1] == "lying" for e in recent)
+        shrank = min(e[3] for e in recent) <= base_h * (1 - cfg.fall_drop_ratio)
+        widened = max(e[4] for e in recent) >= base_aspect * cfg.fall_widen_ratio
+        return lying or shrank or widened
+
+    def _near_border(self, b: BBox, size: tuple[int, int] | None) -> bool:
+        if not size:
+            return False
+        w, h = size
+        mx, my = w * self.cfg.border_ratio, h * self.cfg.border_ratio
+        return b[0] <= mx or b[1] <= my or b[2] >= w - mx or b[3] >= h - my
+
+    def _adopt_ghost(self, cam: str, person: Person, track: _Track, now: float) -> None:
+        """새로 인식된 사람이 '쓰러진 뒤 인식이 끊긴 사람' 자리에서 나타났으면 같은 사람으로 본다.
+        서 있으면 일어난 것이므로 해제, 아니면 쓰러진 상태와 무반응 시간을 이어받는다."""
+        cx, cy = _center(person.bbox)
+        for (c, tid), g in list(self._tracks.items()):
+            if c != cam or g is track or g.state != _TrackState.FALLEN or g.last_bbox is None:
+                continue
+            if now - g.last_seen < self.cfg.lost_sec:
+                continue
+            x1, y1, x2, y2 = g.last_bbox
+            mx, my = (x2 - x1) * 0.5, (y2 - y1) * 0.5
+            if not (x1 - mx <= cx <= x2 + mx and y1 - my <= cy <= y2 + my):
+                continue
+            del self._tracks[(c, tid)]
+            if self._posture(person) != "upright":
+                track.state, track.state_since = _TrackState.FALLEN, g.state_since
+                track.anchor, track.anchor_since = (cx, cy), g.anchor_since
+            return
 
     def _event(self, cam, etype, severity, now, person=None, extra="", dedup="") -> Event | None:
         track_id = person.track_id if person else None

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -36,7 +37,9 @@ log = logging.getLogger("main")
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
-CONFIG = yaml.safe_load((BACKEND_DIR / "config.yaml").read_text(encoding="utf-8"))
+# CCTV_CONFIG 환경변수로 다른 설정 파일을 쓸 수 있다 (예: 테스트 영상용 설정)
+CONFIG_PATH = Path(os.environ.get("CCTV_CONFIG", BACKEND_DIR / "config.yaml"))
+CONFIG = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
 
 CAMERAS = CONFIG.get("cameras", [])
 CAMERA_NAMES = {c["id"]: c["name"] for c in CAMERAS}
@@ -117,7 +120,22 @@ def on_frame(result: FrameResult) -> list[Event]:
     return events
 
 
+def fallen_boxes(camera_id: str):
+    with _engine_lock:
+        return engine.fallen_boxes(camera_id)
+
+
 workers: dict = {}
+
+
+def _split_cpu_threads(n_cameras: int) -> None:
+    """CPU로 분석할 때 카메라들이 모든 코어를 서로 차지하려고 다투면 오히려 느려진다.
+    코어를 카메라 수로 나눠 각자 쓰게 한다 (GPU 사용 시에는 영향 거의 없음)."""
+    import torch
+
+    threads = max(1, (os.cpu_count() or 1) // max(1, n_cameras))
+    torch.set_num_threads(threads)
+    log.info("CPU 스레드: 카메라당 %d개 (카메라 %d대)", threads, n_cameras)
 
 
 def start_workers() -> None:
@@ -132,6 +150,7 @@ def start_workers() -> None:
         log.error("AI 의존성(ultralytics/opencv) 없음, 분석 비활성화: %s", exc)
         return
     models = CONFIG.get("models", {})
+    _split_cpu_threads(len(sources))
 
     def factory():
         return Detector(
@@ -139,10 +158,20 @@ def start_workers() -> None:
             models.get("helmet"),
             models.get("fire"),
             device=str(models.get("device", "auto")),
+            imgsz=int(models.get("imgsz", 640)),
+            conf=float(models.get("conf", 0.25)),
         )
 
     for cam in sources:
-        w = CameraWorker(cam["id"], cam["source"], factory, on_frame, fps=float(models.get("fps", 5)))
+        w = CameraWorker(
+            cam["id"],
+            cam["source"],
+            factory,
+            on_frame,
+            fallen_boxes=fallen_boxes,
+            fps=float(models.get("fps", 0)),
+            display_fps=float(models.get("display_fps", 15)),
+        )
         w.start()
         workers[cam["id"]] = w
 
@@ -180,6 +209,12 @@ def get_config():
             for c in CAMERAS
         ],
     }
+
+
+@app.get("/api/stats")
+def get_stats():
+    """카메라별 AI 분석 속도 (추론 시간 ms, 초당 분석 프레임)."""
+    return [w.stats() for w in workers.values()]
 
 
 @app.get("/api/events")

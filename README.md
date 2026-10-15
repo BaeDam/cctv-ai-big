@@ -5,6 +5,7 @@
 
 - 구상서·일정(~10/28): [`docs/PLAN.md`](docs/PLAN.md)
 - 맥북(M4/M5) 설치·카메라 연결: [`docs/MAC_SETUP.md`](docs/MAC_SETUP.md)
+- 실제 AI 감지 테스트 결과: [`docs/AI_TEST.md`](docs/AI_TEST.md)
 
 ## 주요 기능
 - **분할 화면 직접 설정**: 1/4/9/16 분할 + 가로×세로 직접 입력 (브라우저에 저장)
