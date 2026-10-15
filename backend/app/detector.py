@@ -5,6 +5,8 @@
 - 화재·연기: 화재 데이터셋(D-Fire 등)으로 학습한 커스텀 모델 (클래스 예: fire / smoke)
 커스텀 모델 경로를 비워두면 해당 항목은 판단하지 않는다.
 
+연산 장치(device)는 "auto" 면 NVIDIA GPU(cuda) → 맥 Apple Silicon GPU(mps) → CPU 순으로 고른다.
+
 카메라마다 추적 상태가 따로 있어야 하므로 Detector 는 카메라당 하나씩 만든다.
 """
 
@@ -16,6 +18,18 @@ from .situation import FrameResult, Person
 _KP = {"left_shoulder": 5, "right_shoulder": 6, "left_hip": 11, "right_hip": 12}
 
 
+def pick_device(device: str = "auto") -> str:
+    if device != "auto":
+        return device
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():  # M1~M5 맥북
+        return "mps"
+    return "cpu"
+
+
 class Detector:
     def __init__(
         self,
@@ -24,6 +38,7 @@ class Detector:
         fire_model: str | None = None,
         conf: float = 0.4,
         kp_conf: float = 0.5,
+        device: str = "auto",
     ):
         from ultralytics import YOLO  # 무거운 의존성이라 실제 사용할 때만 import
 
@@ -32,12 +47,14 @@ class Detector:
         self.fire = YOLO(fire_model) if fire_model else None
         self.conf = conf
         self.kp_conf = kp_conf
+        self.device = pick_device(device)
 
     def detect(self, frame, camera_id: str, ts: float) -> FrameResult:
         result = FrameResult(camera_id=camera_id, timestamp=ts)
 
         r = self.pose.track(
-            frame, persist=True, classes=[0], conf=self.conf, tracker="bytetrack.yaml", verbose=False
+            frame, persist=True, classes=[0], conf=self.conf, tracker="bytetrack.yaml",
+            device=self.device, verbose=False,
         )[0]
         if r.boxes is not None and r.boxes.id is not None:
             boxes = r.boxes.xyxy.cpu().numpy()
@@ -59,7 +76,7 @@ class Detector:
             self._apply_helmet(frame, result.persons)
 
         if self.fire is not None:
-            fr = self.fire(frame, conf=self.conf, verbose=False)[0]
+            fr = self.fire(frame, conf=self.conf, device=self.device, verbose=False)[0]
             names = {int(c): fr.names[int(c)].lower() for c in fr.boxes.cls.tolist()}
             labels = set(names.values())
             result.fire = "fire" in labels
@@ -67,7 +84,7 @@ class Detector:
         return result
 
     def _apply_helmet(self, frame, persons: list[Person]) -> None:
-        hr = self.helmet(frame, conf=self.conf, verbose=False)[0]
+        hr = self.helmet(frame, conf=self.conf, device=self.device, verbose=False)[0]
         dets = [
             (hr.names[int(c)].lower(), b)
             for c, b in zip(hr.boxes.cls.tolist(), hr.boxes.xyxy.cpu().numpy().tolist())

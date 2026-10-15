@@ -9,9 +9,12 @@ models:
   helmet: null              # 예: "models/helmet.pt" (클래스: helmet / head)
   fire: null                # 예: "models/fire.pt"   (클래스: fire / smoke)
   fps: 5                    # 카메라별 초당 분석 프레임
+  device: auto              # auto: NVIDIA GPU → 맥 GPU(mps) → CPU 순으로 자동 선택
 
 # source: RTSP 주소, 영상 파일 경로, 웹캠 번호(0). 비워두면 화면에 데모 영상 표시
 cameras:
+  # 맥북 내장 카메라로 테스트하려면 cam01 의 source 를 "0" 으로
+  # 유선 IP 카메라 예: "rtsp://admin:비밀번호@192.168.0.10:554/stream1"
   - { id: cam01, name: "정문 출입구",     source: "" }
   - { id: cam02, name: "자재 야적장",     source: "" }
   - { id: cam03, name: "타워크레인 하부", source: "" }

@@ -134,7 +134,12 @@ def start_workers() -> None:
     models = CONFIG.get("models", {})
 
     def factory():
-        return Detector(models.get("pose", "yolo11n-pose.pt"), models.get("helmet"), models.get("fire"))
+        return Detector(
+            models.get("pose", "yolo11n-pose.pt"),
+            models.get("helmet"),
+            models.get("fire"),
+            device=str(models.get("device", "auto")),
+        )
 
     for cam in sources:
         w = CameraWorker(cam["id"], cam["source"], factory, on_frame, fps=float(models.get("fps", 5)))
