@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .agent import GeminiAgent
 from .dispatcher import EmergencyDispatcher, Incident, MockChannel, SmsChannel, WebhookChannel
 from .situation import (
     EMERGENCY_TARGET,
@@ -36,6 +37,22 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("main")
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_env_file(path: Path) -> None:
+    """backend/.env 의 KEY=VALUE 를 환경변수로 읽는다 (이미 설정된 값은 덮어쓰지 않음).
+    API 키 같은 비밀 값은 이 파일에만 두고, 코드·설정 파일·git 에는 넣지 않는다."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file(BACKEND_DIR / ".env")
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
 # CCTV_CONFIG 환경변수로 다른 설정 파일을 쓸 수 있다 (예: 테스트 영상용 설정)
 CONFIG_PATH = Path(os.environ.get("CCTV_CONFIG", BACKEND_DIR / "config.yaml"))
@@ -105,12 +122,40 @@ dispatcher = EmergencyDispatcher(
 _dispatch_lock = threading.Lock()
 
 
+agent_cfg = CONFIG.get("agent", {}) or {}
+agent = GeminiAgent(model=agent_cfg.get("model", "gemini-flash-latest"), timeout=float(agent_cfg.get("timeout_sec", 15)))
+AGENT_ON = agent.enabled and agent_cfg.get("enabled", True)
+log.info("AI 에이전트(Gemini): %s", f"사용 ({agent.model})" if AGENT_ON else "사용 안 함 (GEMINI_API_KEY 없음)")
+
+
 def handle_events(events: list[Event]) -> None:
     for ev in events:
         hub.publish("event", ev.to_dict())
-        if ev.severity == Severity.CRITICAL:
-            with _dispatch_lock:
-                dispatcher.escalate(ev)
+        if not ev.emergency:
+            continue
+        with _dispatch_lock:
+            before = set(dispatcher.incidents)
+            inc = dispatcher.escalate(ev)
+            is_new = inc is not None and inc.id not in before
+        if is_new and AGENT_ON:
+            _ask_agent(inc)
+
+
+def _ask_agent(inc: Incident) -> None:
+    """신고 창은 즉시 띄우고, AI 판단은 뒤에서 받아와 창에 덧붙인다 (감지 속도에 영향 없음)."""
+    worker = workers.get(inc.event.camera_id)
+    snapshot = worker.latest_jpeg if worker else None
+    if snapshot is None:
+        dispatcher.attach_ai(inc.id, {"error": "장면 사진 없음 (시뮬레이션 이벤트)"})
+        return
+    dispatcher.attach_ai(inc.id, {"pending": True})
+
+    def run():
+        result = agent.assess([snapshot], CAMERA_NAMES.get(inc.event.camera_id, inc.event.camera_id), inc.event.message)
+        with _dispatch_lock:
+            dispatcher.attach_ai(inc.id, result)
+
+    threading.Thread(target=run, daemon=True, name=f"agent-{inc.id}").start()
 
 
 def on_frame(result: FrameResult) -> list[Event]:
@@ -204,6 +249,7 @@ def get_config():
     return {
         "site": CONFIG.get("site", {}),
         "countdown_sec": dispatcher.countdown_sec,
+        "agent": {"enabled": bool(AGENT_ON), "model": agent.model if AGENT_ON else None},
         "cameras": [
             {"id": c["id"], "name": c["name"], "stream": f"/stream/{c['id']}.mjpg" if c["id"] in workers else None}
             for c in CAMERAS
@@ -220,6 +266,14 @@ def get_stats():
 @app.get("/api/events")
 def get_events():
     return hub.recent_events
+
+
+@app.delete("/api/events")
+def clear_events():
+    """AI 이벤트 목록 비우기 (신고 사건 기록은 유지)."""
+    hub.recent_events = []
+    hub.publish("events_cleared", {})
+    return {"ok": True}
 
 
 @app.get("/api/incidents")
@@ -267,7 +321,7 @@ def simulate(req: SimulateRequest):
         severity=severity,
         message=EVENT_LABEL[req.type] + " (시뮬레이션)",
         timestamp=time.time(),
-        emergency=EMERGENCY_TARGET.get(req.type) if severity == Severity.CRITICAL else None,
+        emergency=EMERGENCY_TARGET.get(req.type) if severity == Severity.CRITICAL or req.type == EventType.FALL else None,
     )
     handle_events([ev])
     return ev.to_dict()

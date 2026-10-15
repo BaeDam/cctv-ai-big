@@ -28,7 +28,7 @@ def test_fall_then_unresponsive_escalates_to_119():
 
     assert types(events) == [EventType.FALL, EventType.UNRESPONSIVE]
     fall, unresp = events
-    assert fall.severity == Severity.DANGER and fall.emergency is None
+    assert fall.severity == Severity.DANGER and fall.emergency == "119"  # 쓰러지면 즉시 신고 창
     assert unresp.severity == Severity.CRITICAL and unresp.emergency == "119"
     assert 2.4 <= fall.timestamp <= 2.8
     assert unresp.timestamp >= fall.timestamp + 10

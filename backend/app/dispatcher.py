@@ -44,6 +44,7 @@ class Incident:
     status: IncidentStatus = IncidentStatus.PENDING
     resolved_by: str | None = None  # "auto" / "operator"
     log: list[str] = field(default_factory=list)
+    ai: dict | None = None  # AI 에이전트(Gemini) 판단 결과. {"pending": True} 면 판단 중
 
     def to_dict(self) -> dict:
         return {
@@ -55,6 +56,7 @@ class Incident:
             "status": self.status.value,
             "resolved_by": self.resolved_by,
             "log": self.log,
+            "ai": self.ai,
         }
 
 
@@ -129,14 +131,19 @@ class EmergencyDispatcher:
     def escalate(self, event: Event) -> Incident | None:
         if not event.emergency:
             return None
-        # 같은 카메라·같은 종류로 이미 대기 중인 사건이 있으면 새로 만들지 않음
+        # 같은 카메라에서 같은 계열(쓰러짐→무반응 등)로 대기 중인 사건이 있으면 새로 만들지 않고,
+        # 더 심각한 내용이면 그 사건을 격상한다
         # (쓰러진 사람은 AI 추적 번호가 바뀌기 쉬워서 사람 단위가 아니라 카메라 단위로 묶는다)
         for inc in self.incidents.values():
             if (
                 inc.status == IncidentStatus.PENDING
                 and inc.event.camera_id == event.camera_id
-                and inc.event.type == event.type
+                and _family(inc.event.type) == _family(event.type)
             ):
+                if _rank(event) > _rank(inc.event):
+                    inc.event = event
+                    inc.log.append(f"격상: {event.message}")
+                    self._notify(inc)
                 return inc
         now = self.clock()
         inc = Incident(
@@ -150,6 +157,15 @@ class EmergencyDispatcher:
         self.incidents[inc.id] = inc
         self._notify(inc)
         return inc
+
+    def attach_ai(self, incident_id: int, result: dict) -> None:
+        inc = self.incidents.get(incident_id)
+        if inc is None:
+            return
+        inc.ai = result
+        if "error" not in result and not result.get("pending"):
+            inc.log.append(f"AI 판단: {result.get('severity')} / {result.get('call')} — {result.get('reason')}")
+        self._notify(inc)
 
     def cancel(self, incident_id: int, by: str = "operator") -> Incident | None:
         inc = self.incidents.get(incident_id)
@@ -180,11 +196,14 @@ class EmergencyDispatcher:
         cam = self.camera_names.get(ev.camera_id, ev.camera_id)
         when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ev.timestamp))
         kind = "구급/화재" if inc.target == "119" else "경찰 출동"
-        return (
+        msg = (
             f"[CCTV AI 자동신고·{kind} 요청] {ev.message}\n"
             f"장소: {self.site_name} {self.site_address} / 카메라: {cam}\n"
             f"발생: {when}"
         )
+        if inc.ai and inc.ai.get("report"):
+            msg += f"\nAI 상황 판단: {inc.ai['report']}"
+        return msg
 
     def _dispatch(self, inc: Incident, by: str) -> None:
         message = self.build_message(inc)
@@ -201,6 +220,18 @@ class EmergencyDispatcher:
     def _notify(self, inc: Incident) -> None:
         if self.on_change:
             self.on_change(inc)
+
+
+_FAMILY = {"fall": "person_down", "unresponsive": "person_down", "fire": "fire", "smoke": "fire"}
+_SEVERITY_RANK = {"info": 0, "warning": 1, "danger": 2, "critical": 3}
+
+
+def _family(etype) -> str:
+    return _FAMILY.get(etype.value, etype.value)
+
+
+def _rank(ev: Event) -> int:
+    return _SEVERITY_RANK.get(ev.severity.value, 0)
 
 
 def _safe_send(ch: Channel, inc: Incident, message: str) -> bool:

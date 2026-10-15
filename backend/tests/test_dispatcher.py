@@ -68,8 +68,33 @@ def test_duplicate_pending_event_reuses_incident():
 
 def test_non_emergency_event_is_ignored():
     d = make(RecordingChannel(), Clock())
-    ev = Event("cam01", EventType.FALL, Severity.DANGER, "쓰러짐", 0.0, 1)
+    ev = Event("cam01", EventType.NO_HELMET, Severity.WARNING, "안전모 미착용", 0.0, 1)
     assert d.escalate(ev) is None
+
+
+def test_fall_opens_incident_and_unresponsive_upgrades_it():
+    clock, ch = Clock(), RecordingChannel()
+    d = make(ch, clock)
+    fall = Event("cam01", EventType.FALL, Severity.DANGER, "쓰러짐 감지", 1000.0, 1, emergency="119")
+    inc = d.escalate(fall)
+    assert inc is not None and inc.status == IncidentStatus.PENDING  # 쓰러지는 즉시 신고 창
+    clock.t += 8
+    same = d.escalate(critical(track_id=5))  # 8초 뒤 무반응 확인 (추적 번호가 바뀌어도)
+    assert same is inc and inc.event.type == EventType.UNRESPONSIVE
+    assert inc.deadline == 1000.0 + 15  # 카운트다운은 처음 쓰러진 시점 기준 그대로
+    clock.t += 7
+    d.tick()
+    assert inc.status == IncidentStatus.DISPATCHED and "무반응" in ch.sent[0]
+
+
+def test_ai_assessment_is_attached_and_added_to_report():
+    clock, ch = Clock(), RecordingChannel()
+    d = make(ch, clock)
+    inc = d.escalate(critical())
+    d.attach_ai(inc.id, {"severity": "높음", "call": "119", "reason": "바닥에 누워 움직임 없음", "report": "작업자 1명 쓰러져 의식 없음 추정"})
+    d.confirm(inc.id)
+    assert "AI 상황 판단: 작업자 1명 쓰러져 의식 없음 추정" in ch.sent[0]
+    assert inc.to_dict()["ai"]["call"] == "119"
 
 
 def test_all_channels_failed_marks_failed():

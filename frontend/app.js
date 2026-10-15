@@ -20,7 +20,10 @@
     fall: "danger", unresponsive: "critical", fire: "critical", smoke: "critical",
     zone_intrusion: "warning", no_helmet: "warning", violence: "critical",
   };
-  const TYPE_EMERGENCY = { unresponsive: "119", fire: "119", smoke: "119", violence: "112" };
+  // 쓰러짐은 감지 즉시 신고 창을 띄운다 (무반응이 확인되면 같은 창이 '긴급'으로 격상)
+  const TYPE_EMERGENCY = { fall: "119", unresponsive: "119", fire: "119", smoke: "119", violence: "112" };
+  const FAMILY = { fall: "person_down", unresponsive: "person_down", fire: "fire", smoke: "fire" };
+  const family = (t) => FAMILY[t] || t;
   const DEMO_CAMERAS = [
     "정문 출입구", "자재 야적장", "타워크레인 하부", "1층 작업장", "2층 작업장", "계단실",
     "지하 주차장", "후문", "가설 사무실", "옥상", "장비 주기장", "용접 작업장",
@@ -374,6 +377,12 @@
     if (ev.severity !== "critical") toast(`${camName(ev.camera_id)} · ${ev.message}`, ev.severity);
 
     if (!state.live && ev.emergency) {
+      // 같은 카메라에서 대기 중인 같은 계열 사건이 있으면 새 창 대신 격상
+      const open = pendingIncidents().find((i) => i.event.camera_id === ev.camera_id && family(i.event.type) === family(ev.type));
+      if (open) {
+        if (LEVEL_RANK[ev.severity] > LEVEL_RANK[open.event.severity]) upsertIncident({ ...open, event: ev });
+        return;
+      }
       upsertIncident({
         id: state.demoIncidentId++,
         event: ev,
@@ -415,15 +424,34 @@
     modal.hidden = false;
     if (shownIncidentId !== inc.id) {
       shownIncidentId = inc.id;
-      $("emTarget").textContent = inc.target;
-      $("emTitle").textContent = inc.target === "119" ? "긴급 상황 — 119 구급/소방" : "긴급 상황 — 112 경찰";
-      $("emMessage").textContent = inc.event.message;
-      $("emCamera").textContent = `${camName(inc.event.camera_id)} · ${fmtTime(inc.event.timestamp)}`;
       const cam = camById(inc.event.camera_id);
       $("emFeed").replaceChildren(cam ? createFeed(cam) : el("div"));
     }
+    // 내용은 매번 갱신 (쓰러짐 → 무반응 격상, AI 판단 도착)
+    const critical = inc.event.severity === "critical";
+    $("emTarget").textContent = inc.target;
+    $("emTitle").textContent = inc.target === "112" ? "긴급 상황 — 112 경찰"
+      : critical ? "긴급 상황 — 119 구급/소방" : "쓰러짐 감지 — 119 신고 대기";
+    $("emMessage").textContent = inc.event.message;
+    $("emCamera").textContent = `${camName(inc.event.camera_id)} · ${fmtTime(inc.event.timestamp)}`;
+    renderAi(inc.ai);
     $("emQueue").textContent = pending.length > 1 ? `대기 중인 긴급 상황 ${pending.length - 1}건 더 있음` : "";
     tickEmergency();
+  }
+
+  function renderAi(ai) {
+    const box = $("emAi");
+    box.className = "em-ai";
+    if (!ai) { box.hidden = true; return; }
+    box.hidden = false;
+    if (ai.pending) { box.textContent = "AI(Gemini)가 장면을 확인하는 중…"; return; }
+    if (ai.error) { box.classList.add("muted"); box.textContent = `AI 판단 사용 불가: ${ai.error}`; return; }
+    box.classList.add(ai.is_emergency ? "alert" : "calm");
+    box.replaceChildren(
+      el("b", null, `AI 판단: ${ai.is_emergency ? "위급 상황으로 보임" : "위급하지 않을 수 있음"} · 심각도 ${ai.severity} · 권고 ${ai.call}`),
+      el("div", null, ai.observation),
+      el("div", "em-ai-reason", `근거: ${ai.reason}`),
+    );
   }
 
   function tickEmergency() {
@@ -476,7 +504,7 @@
       message: TYPE_LABEL[type] + " (시뮬레이션)",
       timestamp: Date.now() / 1000,
       track_id: null,
-      emergency: TYPE_SEVERITY[type] === "critical" ? TYPE_EMERGENCY[type] : null,
+      emergency: TYPE_EMERGENCY[type] || null,
     });
   }
 
@@ -542,6 +570,7 @@
       const msg = JSON.parse(m.data);
       if (msg.kind === "event") addEvent(msg.data);
       if (msg.kind === "incident") upsertIncident(msg.data);
+      if (msg.kind === "events_cleared") { state.events = []; renderEventList($("eventList"), []); }
     };
     ws.onclose = () => {
       setBadge(false, "재연결 중");
@@ -571,7 +600,12 @@
     $("viewerNext").addEventListener("click", () => moveViewer(1));
     $("emCancel").addEventListener("click", () => actOnIncident("cancel"));
     $("emConfirm").addEventListener("click", () => actOnIncident("confirm"));
-    $("clearEvents").addEventListener("click", () => { state.events = []; renderEventList($("eventList"), []); });
+    $("clearEvents").addEventListener("click", async () => {
+      state.events = [];
+      renderEventList($("eventList"), []);
+      if (state.live) { try { await fetch("/api/events", { method: "DELETE" }); } catch { /* 화면에서는 이미 지움 */ } }
+      toast("AI 이벤트 목록을 지웠습니다", "ok");
+    });
     $("simRun").addEventListener("click", () => runSimulation($("simCamera").value, $("simType").value));
 
     document.addEventListener("keydown", (e) => {

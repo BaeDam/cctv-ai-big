@@ -38,7 +38,9 @@ class EventType(str, Enum):
 
 
 # 긴급 이벤트별 신고 기관
+# 쓰러짐(FALL)은 '위험' 단계지만 즉시 신고 창을 띄운다 (무반응이 확인되면 같은 사건이 '긴급'으로 격상)
 EMERGENCY_TARGET = {
+    EventType.FALL: "119",
     EventType.UNRESPONSIVE: "119",
     EventType.FIRE: "119",
     EventType.SMOKE: "119",
@@ -449,5 +451,5 @@ class SituationEngine:
             timestamp=now,
             track_id=track_id,
             bbox=person.bbox if person else None,
-            emergency=EMERGENCY_TARGET.get(etype) if severity == Severity.CRITICAL else None,
+            emergency=EMERGENCY_TARGET.get(etype) if severity == Severity.CRITICAL or etype == EventType.FALL else None,
         )

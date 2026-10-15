@@ -62,6 +62,8 @@ input[type=number]{width:48px;background:var(--surface-2);border:1px solid var(-
 .tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:10px;color:var(--muted)}
 .tabs button.on{color:var(--fg);box-shadow:inset 0 -2px 0 var(--accent);background:transparent}
 .pane{flex:1;overflow-y:auto;padding:10px;min-height:0}
+.pane-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;color:var(--muted);font-size:12px}
+.pane-head button{padding:4px 10px;font-size:12px}
 .ev{padding:8px 10px;margin-bottom:6px;background:var(--surface-2);border-left:4px solid var(--muted);border-radius:6px;cursor:pointer}
 .ev:hover{outline:1px solid var(--accent)}
 .ev.danger{border-left-color:var(--danger)} .ev.critical{border-left-color:var(--crit)} .ev.ok{border-left-color:var(--ok)}
@@ -153,7 +155,10 @@ input[type=number]{width:48px;background:var(--surface-2);border:1px solid var(-
       <button data-tab="settings" role="tab">감지 설정</button>
       <button data-tab="help" role="tab">사용법</button>
     </div>
-    <div id="pane-events" class="pane"><ul id="eventList" style="list-style:none;margin:0;padding:0"></ul></div>
+    <div id="pane-events" class="pane">
+      <div class="pane-head"><span id="eventCount" class="mono">0건</span><button id="clearEvents" class="ghost">모두 지우기</button></div>
+      <ul id="eventList" style="list-style:none;margin:0;padding:0"></ul>
+    </div>
     <div id="pane-settings" class="pane" hidden>
       <div class="setting">
         <label for="sConf">사람 인식 민감도 <span id="vConf" class="mono"></span></label>
@@ -181,7 +186,8 @@ input[type=number]{width:48px;background:var(--surface-2);border:1px solid var(-
       <p><b>무엇이 실제로 동작하나요?</b></p>
       <ul>
         <li>사람·자세 인식 AI(YOLO11 pose)가 <b>이 브라우저 안에서</b> 영상을 직접 분석합니다. 서버로 영상을 보내지 않습니다.</li>
-        <li>쓰러짐 → 무반응 → 119 카운트다운 판단 로직은 실제 백엔드와 같은 규칙입니다.</li>
+        <li>쓰러짐이 감지되면 <b>즉시</b> 119 신고 창이 뜨고, 움직임이 없으면 같은 창이 "무반응 (중상 의심)"으로 격상됩니다. 판단 규칙은 실제 백엔드와 같습니다.</li>
+        <li>Gemini AI 판단(실제 위험인지 확인·신고 문장 작성)은 API 키 보안 때문에 <b>서버 버전에서만</b> 동작합니다. 이 페이지에는 키를 넣지 않았습니다.</li>
         <li>신고는 <b>시연 모드</b>라 실제로 발송되지 않고 기록만 남습니다.</li>
       </ul>
       <p><b>조작</b></p>
@@ -371,7 +377,8 @@ class Engine {
     if (last != null && t - last < CFG.cooldown) return null;
     this.lastEmit.set(key, t);
     const critical = type === "unresponsive";
-    return { cam, type, severity: critical ? "critical" : "danger", message: (critical ? "쓰러진 후 무반응 (중상 의심)" : "쓰러짐 감지") + extra, time: Date.now(), emergency: critical ? "119" : null, box };
+    // 쓰러짐은 감지 즉시 신고 창(119 대기), 무반응이 확인되면 같은 창이 '긴급'으로 격상
+    return { cam, type, severity: critical ? "critical" : "danger", message: (critical ? "쓰러진 후 무반응 (중상 의심)" : "쓰러짐 감지") + extra, time: Date.now(), emergency: "119", box };
   }
 }
 function center(b) { return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]; }
@@ -676,6 +683,7 @@ function addEvent(ev) {
 }
 function renderEvents() {
   const list = $("eventList"); list.replaceChildren();
+  $("eventCount").textContent = `${state.events.length}건`;
   if (!state.events.length) {
     list.appendChild(el("li", "empty-msg", state.aiReady ? "AI가 영상을 분석하고 있습니다. 쓰러짐이 감지되면 여기에 표시됩니다." : "AI 모델을 불러오는 중입니다…"));
     return;
@@ -693,7 +701,12 @@ function renderEvents() {
 
 /* ============================================================ 긴급 신고 */
 function openIncident(ev) {
-  if (state.incidents.some((x) => x.status === "pending" && x.ev.cam === ev.cam)) return; // 같은 카메라는 하나로 묶음
+  // 같은 카메라에서 대기 중인 사건이 있으면 새 창 대신 격상 (쓰러짐 → 무반응)
+  const open = state.incidents.find((x) => x.status === "pending" && x.ev.cam === ev.cam);
+  if (open) {
+    if (ev.severity === "critical" && open.ev.severity !== "critical") { open.ev = ev; renderIncident(); }
+    return;
+  }
   state.incidents.push({ id: state.nextIncident++, ev, status: "pending", deadline: Date.now() + settings.countdown * 1000, total: settings.countdown * 1000 });
   renderIncident();
 }
@@ -705,10 +718,12 @@ function renderIncident() {
   $("emg").hidden = false;
   if (shownId !== inc.id) {
     shownId = inc.id;
-    $("emgMsg").textContent = inc.ev.message;
-    $("emgCam").textContent = `${cam ? cam.name : ""} · ${new Date(inc.ev.time).toLocaleTimeString("en-GB", { hour12: false })}`;
     $("emgFeed").replaceChildren(cam ? makeView(cam).canvas : el("div"));
   }
+  const critical = inc.ev.severity === "critical";
+  $("emgTitle").textContent = critical ? "긴급 상황 — 119 구급" : "쓰러짐 감지 — 119 신고 대기";
+  $("emgMsg").textContent = inc.ev.message;
+  $("emgCam").textContent = `${cam ? cam.name : ""} · ${new Date(inc.ev.time).toLocaleTimeString("en-GB", { hour12: false })}`;
   $("emgQueue").textContent = pending.length > 1 ? `· 대기 중 ${pending.length - 1}건 더` : "";
   tickIncident();
 }
@@ -755,6 +770,7 @@ function bindUI() {
   $("vNext").addEventListener("click", () => moveViewer(1));
   $("emgCancel").addEventListener("click", () => { const i = state.incidents.find((x) => x.id === shownId); if (i) resolve(i, "cancelled", "관리자"); });
   $("emgConfirm").addEventListener("click", () => { const i = state.incidents.find((x) => x.id === shownId); if (i) resolve(i, "dispatched", "관리자"); });
+  $("clearEvents").addEventListener("click", () => { state.events = []; renderEvents(); toast("AI 이벤트 목록을 지웠습니다", "ok"); });
   $("addVideo").addEventListener("click", () => $("fileInput").click());
   $("fileInput").addEventListener("change", (e) => {
     const files = [...e.target.files]; if (!files.length) return;

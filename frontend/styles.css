@@ -14,6 +14,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body {
   background: var(--bg);
@@ -193,6 +194,15 @@ input[type="number"] { width: 46px; }
 .em-message { font-size: 18px; font-weight: 700; margin: 4px 0; }
 .em-camera { color: var(--muted); margin: 0 0 10px; }
 .em-feed { height: 200px; border-radius: 8px; overflow: hidden; background: #000; margin-bottom: 12px; }
+.em-ai {
+  text-align: left; font-size: 13px; line-height: 1.55;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 12px; display: grid; gap: 4px;
+}
+.em-ai.alert { border-color: var(--critical); }
+.em-ai.calm { border-color: var(--warning); }
+.em-ai.muted { color: var(--muted); }
+.em-ai-reason { color: var(--muted); }
 .em-countdown { font-size: 16px; }
 #emSeconds { font-size: 28px; font-weight: 900; color: var(--critical); font-variant-numeric: tabular-nums; }
 .em-bar { height: 8px; background: var(--surface-2); border-radius: 4px; margin: 8px 0 16px; overflow: hidden; }

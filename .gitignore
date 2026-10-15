@@ -7,3 +7,6 @@ snapshots/
 *.db
 *.zip
 demo-output/
+.env
+*.env
+!.env.example
