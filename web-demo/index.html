@@ -1,239 +1,303 @@
-<title>CCTV AI 관제</title>
+<title>지켜봄 관제</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 관제실 콘솔: 화면이 주인공, 크롬은 어둡고 조용하게. 위험도 색은 의미로만 쓴다 */
+/* 관제실 콘솔: 영상이 주인공, 크롬은 어둡고 조용하게. 상태 색(주의·위험·긴급)은 의미로만 */
 :root{
   color-scheme:dark;
-  --bg:#0a0e13; --surface:#111821; --surface-2:#18212d; --line:#243041;
-  --fg:#e5ecf3; --muted:#8a97a8; --accent:#4f8cff;
-  --ok:#22c55e; --warn:#facc15; --danger:#fb923c; --crit:#ef4444;
+  --bg:#0A0E13; --s1:#10161E; --s2:#161E28; --s3:#1E2833; --line:#24303E;
+  --fg:#E6ECF2; --muted:#8996A6; --dim:#5D6A7A; --accent:#4F8CFF;
+  --ok:#22C55E; --warn:#FACC15; --danger:#FB923C; --crit:#EF4444;
+  --site-con:#F59E0B; --site-care:#38BDF8; --site-pub:#A78BFA;
   --font:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  --r:10px;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
-body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;display:flex;flex-direction:column;overflow:hidden;margin:0}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:13px;display:flex;flex-direction:column;overflow:hidden}
 button,input,select{font:inherit;color:inherit}
-button{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+button{background:var(--s2);border:1px solid var(--line);border-radius:6px;padding:5px 9px;cursor:pointer;white-space:nowrap;line-height:1.2}
 button:hover{border-color:var(--accent)}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{background:transparent;border-color:transparent}
+button.ghost:hover{border-color:var(--line)}
+button.big{padding:11px 18px;font-size:15px;font-weight:700}
 button.danger{background:var(--crit);border-color:var(--crit);color:#fff}
-button.ghost{background:transparent}
-button.big{padding:12px 20px;font-size:16px;font-weight:700}
-input[type=number]{width:48px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:5px 6px}
-
-.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:10px;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
-  background:var(--surface);border-bottom:1px solid var(--line)}
-.brand{display:flex;gap:10px;align-items:center;min-width:0}
-.dot{width:10px;height:10px;border-radius:50%;background:var(--crit);animation:blink 1.6s infinite}
-.brand b{font-size:16px}
-.brand small{display:block;color:var(--muted);font-size:12px}
-.group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.sep{width:1px;height:24px;background:var(--line)}
-.spacer{flex:1}
-.ai-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.badge{padding:3px 9px;border-radius:999px;font-weight:700;font-size:12px}
-.badge.load{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
-.badge.live{background:color-mix(in srgb,var(--ok) 22%,transparent);color:var(--ok)}
-.badge.err{background:color-mix(in srgb,var(--crit) 22%,transparent);color:var(--crit)}
+input[type=number]{width:42px;background:var(--s2);border:1px solid var(--line);border-radius:6px;padding:4px 5px}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
+/* ---------- 상단 바 ---------- */
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:8px;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px));background:var(--s1);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px}
+.brand .rec{width:9px;height:9px;border-radius:50%;background:var(--crit);animation:blink 1.6s infinite}
+.brand small{font-weight:500;color:var(--muted);font-size:11px;margin-left:2px}
+.seg{display:flex;gap:2px;background:var(--s2);border:1px solid var(--line);border-radius:8px;padding:2px}
+.seg button{border:0;background:transparent;padding:4px 9px;border-radius:6px}
+.seg button.on{background:var(--s3);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.chip-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.group{display:flex;align-items:center;gap:6px}
+.spacer{flex:1}
+.ai{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.badge{padding:3px 9px;border-radius:999px;font-weight:700;font-size:11.5px}
+.badge.load{background:rgba(250,204,21,.15);color:var(--warn)}
+.badge.live{background:rgba(34,197,94,.16);color:var(--ok)}
+.badge.err{background:rgba(239,68,68,.18);color:var(--crit)}
+.badge.off{background:var(--s3);color:var(--muted)}
+
+/* ---------- 본문 ---------- */
 .main{flex:1;display:flex;min-height:0}
-.grid{flex:1;display:grid;gap:6px;padding:8px;min-width:0;min-height:0}
-.tile{position:relative;background:#000;border:2px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:zoom-in;min-height:0}
-.tile:hover{border-color:var(--accent)}
-.tile.empty{background:var(--surface);border-style:dashed;cursor:default;display:grid;place-items:center;color:var(--muted);font-size:13px}
+.side{width:236px;background:var(--s1);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.side-head{padding:10px 12px 6px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px}
+.side-list{flex:1;overflow-y:auto;padding:0 8px 10px}
+.side-group{margin-top:8px}
+.side-group h4{margin:6px 4px;font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.3px;display:flex;justify-content:space-between}
+.cam-row{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;padding:6px 6px;border-radius:6px;cursor:pointer}
+.cam-row:hover{background:var(--s2)}
+.cam-row.sel{background:var(--s3)}
+.cam-row .st{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.cam-row[data-level=danger] .st{background:var(--danger)}
+.cam-row[data-level=critical] .st{background:var(--crit);box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+.cam-row.aioff .st{background:var(--dim)}
+.cam-row .nm{min-width:0}
+.cam-row .nm b{display:block;font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cam-row .nm span{font-size:11px;color:var(--muted)}
+.cam-row .ppl{font-size:11px;color:var(--muted)}
+.side.collapsed{width:0;border:0;overflow:hidden}
+
+.center{flex:1;display:flex;flex-direction:column;min-width:0}
+.grid{flex:1;display:grid;gap:5px;padding:6px;min-height:0}
+.tile{position:relative;background:#000;border:2px solid var(--s3);border-radius:8px;overflow:hidden;cursor:zoom-in;min-height:0;user-select:none}
+.tile:hover{border-color:#3A4A5E}
+.tile.dragover{border-color:var(--accent);border-style:dashed}
 .tile canvas{width:100%;height:100%;display:block}
-.tile-name{position:absolute;left:8px;top:6px;background:rgba(0,0,0,.62);padding:2px 8px;border-radius:4px;font-size:12px;max-width:calc(100% - 110px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile-fps{position:absolute;right:8px;top:6px;background:rgba(0,0,0,.62);padding:2px 7px;border-radius:4px;font-size:11px;color:var(--muted)}
-.tile-alert{position:absolute;left:8px;right:8px;bottom:6px;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:6px;padding:5px 7px;background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,0));font-size:11.5px}
+.tile-top .no{font-family:var(--mono);font-weight:700;font-size:10.5px;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:4px}
+.tile-top .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.tile-top .site{font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.55)}
+.tile-bot{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;padding:5px 7px;font-size:11px;color:#C9D3DD;background:linear-gradient(0deg,rgba(0,0,0,.7),rgba(0,0,0,0))}
+.tile-bot .ppl{font-weight:700}
+.tile-bot .fps{margin-left:auto;color:var(--muted)}
+.tile-acts{position:absolute;right:6px;top:30px;display:flex;flex-direction:column;gap:4px;opacity:0;transition:opacity .12s}
+.tile:hover .tile-acts{opacity:1}
+.tile-acts button{background:rgba(10,14,19,.8);border-color:rgba(255,255,255,.12);padding:3px 7px;font-size:11px}
+.tile-alert{position:absolute;left:7px;right:7px;bottom:26px;padding:4px 8px;border-radius:5px;font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile[data-level=danger]{border-color:var(--danger)}
 .tile[data-level=critical]{border-color:var(--crit);animation:pulse 1s infinite}
 .tile[data-level=danger] .tile-alert{background:var(--danger);color:#111}
 .tile[data-level=critical] .tile-alert{background:var(--crit);color:#fff}
+.tile.aioff canvas{filter:saturate(.5) brightness(.8)}
+.tile.add{display:grid;place-items:center;background:var(--s1);border-style:dashed;cursor:pointer;color:var(--muted);text-align:center}
+.tile.add b{display:block;font-size:26px;color:var(--fg);font-weight:400}
+.tile.add:hover{border-color:var(--accent);color:var(--fg)}
+.tile.blank{background:var(--s1);border-style:dashed;cursor:default}
+.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:12px}
 
-.panel{width:310px;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.statusbar{display:flex;align-items:center;gap:16px;padding:5px 12px;background:var(--s1);border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.statusbar b{color:var(--fg);font-weight:700}
+.statusbar .kbd{margin-left:auto}
+kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;color:var(--fg)}
+
+/* ---------- 오른쪽 패널 ---------- */
+.panel{width:300px;background:var(--s1);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:1px solid var(--line)}
-.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:10px;color:var(--muted)}
+.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:9px;color:var(--muted)}
 .tabs button.on{color:var(--fg);box-shadow:inset 0 -2px 0 var(--accent);background:transparent}
 .pane{flex:1;overflow-y:auto;padding:10px;min-height:0}
-.pane-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;color:var(--muted);font-size:12px}
-.pane-head button{padding:4px 10px;font-size:12px}
-.ev{padding:8px 10px;margin-bottom:6px;background:var(--surface-2);border-left:4px solid var(--muted);border-radius:6px;cursor:pointer}
+.pane-head{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px}
+.pane-head .seg button{padding:3px 8px;font-size:12px}
+.ev{padding:8px 10px;margin-bottom:6px;background:var(--s2);border-left:4px solid var(--muted);border-radius:6px;cursor:pointer;list-style:none}
 .ev:hover{outline:1px solid var(--accent)}
 .ev.danger{border-left-color:var(--danger)} .ev.critical{border-left-color:var(--crit)} .ev.ok{border-left-color:var(--ok)}
-.ev-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}
-.ev-msg{font-weight:600;margin-top:2px}
-.ev-sub{font-size:12px;color:var(--crit);margin-top:2px}
-.empty-msg{color:var(--muted);text-align:center;padding:18px 8px;line-height:1.6}
+.ev-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:11.5px}
+.ev-msg{font-weight:700;margin-top:2px}
+.ev-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.empty{color:var(--muted);text-align:center;padding:20px 8px;line-height:1.6}
 .setting{display:grid;gap:4px;margin-bottom:14px}
-.setting label{display:flex;justify-content:space-between;font-size:13px}
+.setting label{display:flex;justify-content:space-between;font-size:12.5px}
 .setting input[type=range]{width:100%;accent-color:var(--accent)}
-.setting small{color:var(--muted);font-size:12px;line-height:1.5}
+.setting small{color:var(--muted);font-size:11.5px;line-height:1.5}
+.switch{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.switch small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.tg{position:relative;width:34px;height:20px;border-radius:999px;background:var(--s3);border:1px solid var(--line);flex:none;padding:0}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#AEB9C6;transition:left .12s}
+.tg.on{background:var(--accent);border-color:var(--accent)}
+.tg.on::after{left:16px;background:#fff}
 .help{color:var(--muted);font-size:12.5px;line-height:1.65}
 .help b{color:var(--fg)}
 .help ul{padding-left:18px;margin:6px 0}
 
-.viewer{position:fixed;inset:0;z-index:20;background:rgba(5,8,12,.96);display:flex;flex-direction:column;
-  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-.viewer-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:12px;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.viewer-head b{font-size:18px}
+/* ---------- 확대·긴급·도움말 ---------- */
+.viewer{position:fixed;inset:0;z-index:20;background:rgba(5,8,12,.96);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.viewer-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:10px;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+.viewer-head b{font-size:17px}
 .viewer-head span{color:var(--muted);margin-left:8px}
 .viewer-body{flex:1;display:flex;align-items:center;gap:8px;padding:0 8px;min-height:0}
-.stage{flex:1;height:100%;background:#000;border-radius:var(--r);overflow:hidden;touch-action:pan-y;transition:transform .16s,opacity .16s}
+.stage{flex:1;height:100%;background:#000;border-radius:10px;overflow:hidden;touch-action:pan-y;transition:transform .16s,opacity .16s}
 .stage canvas{width:100%;height:100%;display:block}
 .stage.out-l{transform:translateX(-40px);opacity:0} .stage.out-r{transform:translateX(40px);opacity:0}
-.nav{width:54px;height:120px;font-size:40px;line-height:1;background:rgba(255,255,255,.06);border:0;border-radius:var(--r)}
+.nav{width:50px;height:110px;font-size:38px;line-height:1;background:rgba(255,255,255,.06);border:0;border-radius:10px}
+.strip{display:flex;gap:6px;padding:8px 14px 12px;overflow-x:auto}
+.strip button{flex:none;width:118px;padding:0;border-radius:6px;overflow:hidden;background:#000;border:2px solid transparent;position:relative}
+.strip button.on{border-color:var(--accent)}
+.strip canvas{width:100%;height:66px;display:block}
+.strip span{position:absolute;left:4px;bottom:3px;font-size:10px;background:rgba(0,0,0,.6);padding:0 4px;border-radius:3px}
 
 .emg{position:fixed;inset:0;z-index:40;background:rgba(90,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;animation:flash 1s infinite}
-.emg-box{width:min(560px,100%);background:var(--surface);border:3px solid var(--crit);border-radius:16px;padding:20px;text-align:center;box-shadow:0 0 60px rgba(239,68,68,.45)}
-.emg-target{display:inline-block;font-size:30px;font-weight:900;background:var(--crit);color:#fff;padding:2px 18px;border-radius:10px}
-.emg-box h2{margin:10px 0 2px;font-size:20px}
-.emg-msg{font-size:17px;font-weight:700;margin:4px 0}
+.emg-box{width:min(540px,100%);background:var(--s1);border:3px solid var(--crit);border-radius:16px;padding:18px;text-align:center;box-shadow:0 0 60px rgba(239,68,68,.45)}
+.emg-target{display:inline-block;font-size:28px;font-weight:900;background:var(--crit);color:#fff;padding:2px 16px;border-radius:10px}
+.emg-box h2{margin:8px 0 2px;font-size:19px}
+.emg-msg{font-size:16px;font-weight:700;margin:4px 0}
 .emg-cam{color:var(--muted);margin:0 0 10px}
-.emg-feed{height:210px;border-radius:8px;overflow:hidden;background:#000;margin-bottom:12px}
+.emg-feed{height:200px;border-radius:8px;overflow:hidden;background:#000;margin-bottom:10px}
 .emg-feed canvas{width:100%;height:100%;display:block}
-#emgSec{font-size:28px;font-weight:900;color:var(--crit)}
-.emg-bar{height:8px;background:var(--surface-2);border-radius:4px;margin:8px 0 14px;overflow:hidden}
+#emgSec{font-size:26px;font-weight:900;color:var(--crit)}
+.emg-bar{height:8px;background:var(--s3);border-radius:4px;margin:8px 0 14px;overflow:hidden}
 #emgBar{height:100%;background:var(--crit);width:100%}
 .emg-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.emg-note{color:var(--muted);font-size:12px;margin:10px 0 0}
+.emg-note{color:var(--muted);font-size:11.5px;margin:10px 0 0}
 
-.toasts{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:50;display:flex;flex-direction:column;gap:8px;max-width:calc(100% - 32px)}
-.toast{background:var(--surface-2);border-left:4px solid var(--accent);padding:10px 14px;border-radius:6px;max-width:360px;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.modal{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px}
+.modal-box{width:min(460px,100%);background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:18px}
+.modal-box h3{margin:0 0 10px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13px;align-items:center}
+
+.toasts{position:fixed;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(36px + env(safe-area-inset-bottom,0px));z-index:50;display:flex;flex-direction:column;gap:8px;max-width:calc(100% - 28px)}
+.toast{background:var(--s2);border-left:4px solid var(--accent);padding:9px 13px;border-radius:6px;max-width:340px;box-shadow:0 4px 20px rgba(0,0,0,.4)}
 .toast.danger{border-left-color:var(--danger)} .toast.critical{border-left-color:var(--crit)} .toast.ok{border-left-color:var(--ok)}
 
-.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px;text-align:center;padding:12px}
-
 @keyframes blink{50%{opacity:.25}}
-@keyframes pulse{50%{box-shadow:0 0 0 4px rgba(239,68,68,.5)}}
+@keyframes pulse{50%{box-shadow:0 0 0 3px rgba(239,68,68,.5)}}
 @keyframes flash{50%{background:rgba(130,0,0,.65)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-@media (max-width:900px){
+@media (max-width:1100px){.side{display:none}}
+@media (max-width:860px){
   body{overflow:auto}
   .main{flex-direction:column}
   .grid{min-height:62vh}
-  .panel{width:auto;border-left:0;border-top:1px solid var(--line);min-height:300px}
-  .nav{width:40px;font-size:30px}
-  .sep{display:none}
+  .panel{width:auto;border-left:0;border-top:1px solid var(--line);min-height:280px}
+  .statusbar .kbd{display:none}
 }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="dot"></span><div><b>CCTV AI 관제</b><small>AI가 이 브라우저 안에서 직접 영상을 분석합니다</small></div></div>
-  <div class="group" role="group" aria-label="분할 화면">
+  <div class="brand"><span class="rec"></span>지켜봄 <small>AI CCTV 관제</small></div>
+  <div class="seg" id="siteFilter" role="group" aria-label="현장 필터"></div>
+  <div class="seg" id="layoutSeg" role="group" aria-label="분할 화면">
     <button data-layout="1x1">1</button><button data-layout="2x2">4</button><button data-layout="3x3">9</button><button data-layout="4x4">16</button>
-    <input id="cols" type="number" min="1" max="6" aria-label="가로 칸 수"><span>×</span><input id="rows" type="number" min="1" max="6" aria-label="세로 칸 수">
-    <button id="applyLayout">적용</button>
   </div>
-  <span class="sep"></span>
-  <div class="group">
-    <button id="prevPage" aria-label="이전 페이지">◀</button><span id="pageInfo" class="mono">1 / 1</span><button id="nextPage" aria-label="다음 페이지">▶</button>
-  </div>
-  <span class="sep"></span>
-  <div class="group">
-    <label><button id="addVideo" class="primary">＋ 내 영상으로 테스트</button></label>
-    <input id="fileInput" type="file" accept="video/*" multiple hidden>
-    <button id="restart">영상 처음부터</button>
-    <button id="aiToggle" class="on" aria-pressed="true">AI 분석 켜짐</button>
-  </div>
+  <div class="group"><input id="cols" type="number" min="1" max="6" aria-label="가로 칸 수">×<input id="rows" type="number" min="1" max="6" aria-label="세로 칸 수"><button id="applyLayout">적용</button></div>
+  <div class="group"><button id="prevPage" aria-label="이전 페이지">◀</button><span id="pageInfo" class="mono">1/1</span><button id="nextPage" aria-label="다음 페이지">▶</button></div>
   <span class="spacer"></span>
-  <div class="ai-status"><span id="aiBadge" class="badge load">AI 준비 중</span><span id="aiInfo" class="mono"></span></div>
+  <div class="ai"><span id="aiBadge" class="badge load">AI 준비 중</span><span id="aiInfo" class="mono"></span></div>
+  <button id="aiToggle" class="on" aria-pressed="true" title="Space">AI 분석 켜짐</button>
+  <button id="helpBtn" title="?">단축키</button>
 </header>
 
-<main class="main">
-  <section id="grid" class="grid" aria-label="카메라 화면"></section>
+<div class="main">
+  <aside class="side" id="side" aria-label="카메라 목록">
+    <div class="side-head"><span>카메라 <b id="camCount" style="color:var(--fg)"></b></span><button class="ghost" id="addBtn2">＋ 추가</button></div>
+    <div class="side-list" id="camList"></div>
+  </aside>
+
+  <section class="center">
+    <div class="grid" id="grid" aria-label="카메라 화면"></div>
+    <div class="statusbar">
+      <span>연결 <b id="sbCams">0</b></span>
+      <span>AI 분석 <b id="sbAi">0</b></span>
+      <span>감지된 사람 <b id="sbPpl">0</b></span>
+      <span>처리 대기 신고 <b id="sbInc">0</b></span>
+      <span class="kbd"><kbd>←</kbd><kbd>→</kbd> 페이지 · <kbd>Enter</kbd> 확대 · <kbd>Space</kbd> AI · <kbd>?</kbd> 도움말</span>
+    </div>
+  </section>
+
   <aside class="panel">
     <div class="tabs" role="tablist">
-      <button class="on" data-tab="events" role="tab">AI 이벤트</button>
-      <button data-tab="settings" role="tab">감지 설정</button>
-      <button data-tab="help" role="tab">사용법</button>
+      <button class="on" data-tab="events" role="tab">이벤트 <span id="evBadge" class="mono"></span></button>
+      <button data-tab="settings" role="tab">설정</button>
+      <button data-tab="help" role="tab">안내</button>
     </div>
     <div id="pane-events" class="pane">
-      <div class="pane-head"><span id="eventCount" class="mono">0건</span><button id="clearEvents" class="ghost">모두 지우기</button></div>
-      <ul id="eventList" style="list-style:none;margin:0;padding:0"></ul>
+      <div class="pane-head">
+        <div class="seg" id="evFilter"><button class="on" data-f="all">전체</button><button data-f="critical">긴급</button><button data-f="danger">위험</button><button data-f="log">처리</button></div>
+        <button id="clearEvents">모두 지우기</button>
+      </div>
+      <ul id="eventList" style="margin:0;padding:0"></ul>
     </div>
     <div id="pane-settings" class="pane" hidden>
-      <div class="setting">
-        <label for="sConf">사람 인식 민감도 <span id="vConf" class="mono"></span></label>
-        <input id="sConf" type="range" min="0.10" max="0.60" step="0.05">
-        <small>낮출수록 애매한 자세도 사람으로 잡지만 잘못 잡는 경우도 늘어납니다. 기본 0.25</small>
-      </div>
-      <div class="setting">
-        <label for="sConfirm">쓰러짐 확정 시간 <span id="vConfirm" class="mono"></span></label>
-        <input id="sConfirm" type="range" min="0.4" max="3" step="0.1">
-        <small>넘어지는 동작 뒤 누운 상태가 이만큼 이어지면 쓰러짐으로 확정. 기본 1.0초</small>
-      </div>
-      <div class="setting">
-        <label for="sImmobile">무반응 판정 시간 <span id="vImmobile" class="mono"></span></label>
-        <input id="sImmobile" type="range" min="3" max="20" step="1">
-        <small>쓰러진 뒤 이 시간 동안 움직임이 없으면 긴급(119). 기본 8초</small>
-      </div>
-      <div class="setting">
-        <label for="sCountdown">자동 신고 카운트다운 <span id="vCountdown" class="mono"></span></label>
-        <input id="sCountdown" type="range" min="5" max="30" step="1">
-        <small>이 시간 안에 취소하지 않으면 자동 신고. 기본 15초</small>
-      </div>
-      <button id="resetSettings" class="ghost">기본값으로</button>
+      <div class="switch"><div>알림 화면 맨 앞으로<small>위험이 생긴 카메라를 그리드 첫 칸으로 옮김</small></div><button class="tg on" id="tgPriority" aria-pressed="true"></button></div>
+      <div class="switch"><div>보이는 화면 우선 분석<small>지금 화면에 없는 카메라는 느리게 분석해 기기 부담을 줄임</small></div><button class="tg on" id="tgVisible" aria-pressed="true"></button></div>
+      <div class="switch"><div>절전 모드<small>카메라당 초당 2장까지만 분석 (노트북 발열 감소)</small></div><button class="tg" id="tgEco" aria-pressed="false"></button></div>
+      <div class="switch"><div>사람 박스 표시<small>끄면 쓰러짐 표시만 보임</small></div><button class="tg on" id="tgBoxes" aria-pressed="true"></button></div>
+      <div style="height:12px"></div>
+      <div class="setting"><label for="sConf">사람 인식 민감도 <span id="vConf" class="mono"></span></label><input id="sConf" type="range" min="0.10" max="0.60" step="0.05"><small>낮을수록 애매한 자세도 잡지만 잘못 잡는 경우도 늘어남 (기본 0.25)</small></div>
+      <div class="setting"><label for="sConfirm">쓰러짐 확정 시간 <span id="vConfirm" class="mono"></span></label><input id="sConfirm" type="range" min="0.4" max="3" step="0.1"><small>기본 1.0초</small></div>
+      <div class="setting"><label for="sImmobile">무반응 판정 시간 <span id="vImmobile" class="mono"></span></label><input id="sImmobile" type="range" min="3" max="20" step="1"><small>쓰러진 뒤 움직임 없으면 긴급 (기본 8초)</small></div>
+      <div class="setting"><label for="sCountdown">자동 신고 카운트다운 <span id="vCountdown" class="mono"></span></label><input id="sCountdown" type="range" min="5" max="30" step="1"><small>기본 15초</small></div>
+      <button id="resetSettings">기본값으로</button>
     </div>
     <div id="pane-help" class="pane help" hidden>
-      <p><b>무엇이 실제로 동작하나요?</b></p>
+      <p><b>지금 동작하는 것</b></p>
       <ul>
-        <li>사람·자세 인식 AI(YOLO11 pose)가 <b>이 브라우저 안에서</b> 영상을 직접 분석합니다. 서버로 영상을 보내지 않습니다.</li>
-        <li>쓰러짐이 감지되면 <b>즉시</b> 119 신고 창이 뜨고, 움직임이 없으면 같은 창이 "무반응 (중상 의심)"으로 격상됩니다. 판단 규칙은 실제 백엔드와 같습니다.</li>
-        <li>Gemini AI 판단(실제 위험인지 확인·신고 문장 작성)은 API 키 보안 때문에 <b>서버 버전에서만</b> 동작합니다. 이 페이지에는 키를 넣지 않았습니다.</li>
-        <li>신고는 <b>시연 모드</b>라 실제로 발송되지 않고 기록만 남습니다.</li>
+        <li>사람·자세 인식 AI(YOLO11 pose)가 <b>이 브라우저 안에서</b> 15개 화면을 분석</li>
+        <li>쓰러짐 → 즉시 신고 창 → 무반응 시 긴급 격상 → 자동 신고(시연 모드)</li>
       </ul>
-      <p><b>조작</b></p>
+      <p><b>아직 데모에 없는 것</b></p>
       <ul>
-        <li>위쪽 숫자로 분할 수 변경, 가로×세로 직접 입력 가능</li>
-        <li>화면 클릭 → 확대, ‹ › 버튼·키보드 ←/→·스와이프로 넘기기, Esc로 닫기</li>
-        <li><b>＋ 내 영상으로 테스트</b>: 휴대폰으로 찍은 영상(전신이 보이게 서 있다가 바닥에 눕기)을 올리면 그 영상도 분석합니다</li>
-        <li>감지 설정 탭에서 판정 시간과 민감도를 바꿔 볼 수 있습니다</li>
+        <li>싸움·폭행, 안전모 미착용, 화재 판단은 개발 중. 공공장소·공사장 화면은 현재 <b>사람 인식과 쓰러짐</b>만 판단</li>
       </ul>
-      <p><b>샘플 영상</b></p>
+      <p><b>영상 출처</b></p>
       <ul>
-        <li>공개 낙상 데이터셋(github.com/ambianic/fall-detection)의 요양시설 CCTV 영상 4개</li>
-        <li>원본이 넘어진 직후 끝나서 무반응 판정을 볼 수 있게 마지막 장면을 12초 정지 화면으로 늘렸습니다</li>
-      </ul>
-      <p><b>알아둘 점</b></p>
-      <ul>
-        <li>공개 AI 모델은 바닥에 쓰러진 사람을 잘 인식하지 못합니다. 그래서 "넘어지는 동작 직후 화면 가운데서 인식이 끊김"도 쓰러짐으로 보고, 마지막 위치에 <b>FALL?</b> 박스를 그립니다.</li>
-        <li>분석 속도는 이 기기의 CPU 성능에 따라 다릅니다. 각 화면 오른쪽 위에 초당 분석 장수가 표시됩니다.</li>
+        <li>공공장소: Surveillance Camera Fight Dataset (Aktı et al., 2019, MIT)</li>
+        <li>요양병원: 공개 낙상 영상 github.com/ambianic/fall-detection (무반응 확인용으로 끝 장면 연장)</li>
+        <li>공사장: 공개 PPE 감지 저장소 샘플 영상 (ppe-1~3)</li>
       </ul>
     </div>
   </aside>
-</main>
+</div>
+
+<input id="fileInput" type="file" accept="image/gif,video/*" multiple hidden>
 
 <div id="viewer" class="viewer" hidden>
-  <div class="viewer-head"><div><b id="vName"></b><span id="vIndex" class="mono"></span></div><button id="vClose" class="ghost">✕ 닫기 (Esc)</button></div>
+  <div class="viewer-head"><div><b id="vName"></b><span id="vIndex" class="mono"></span></div>
+    <div class="group"><button id="vAi">AI 끄기</button><button id="vClose" class="ghost">✕ 닫기 (Esc)</button></div></div>
   <div class="viewer-body">
     <button id="vPrev" class="nav" aria-label="이전 카메라">‹</button>
     <div id="stage" class="stage"></div>
     <button id="vNext" class="nav" aria-label="다음 카메라">›</button>
   </div>
+  <div class="strip" id="strip"></div>
 </div>
 
 <div id="emg" class="emg" hidden>
   <div class="emg-box" role="alertdialog" aria-labelledby="emgTitle">
-    <div id="emgTarget" class="emg-target">119</div>
-    <h2 id="emgTitle">긴급 상황 — 119 구급</h2>
+    <div class="emg-target">119</div>
+    <h2 id="emgTitle">쓰러짐 감지 — 119 신고 대기</h2>
     <p id="emgMsg" class="emg-msg"></p>
     <p id="emgCam" class="emg-cam"></p>
     <div id="emgFeed" class="emg-feed"></div>
     <div><span id="emgSec" class="mono">15</span>초 후 자동 신고</div>
     <div class="emg-bar"><div id="emgBar"></div></div>
     <div class="emg-actions">
-      <button id="emgCancel" class="ghost big">오탐 — 신고 취소</button>
+      <button id="emgCancel" class="big">오탐 — 신고 취소</button>
       <button id="emgConfirm" class="danger big">지금 즉시 신고</button>
     </div>
-    <p class="emg-note">시연 모드: 실제로 112/119에 발송되지 않습니다 <span id="emgQueue"></span></p>
+    <p class="emg-note">시연 모드: 실제로 112/119에 발송되지 않음 <span id="emgQueue"></span></p>
+  </div>
+</div>
+
+<div id="helpModal" class="modal" hidden>
+  <div class="modal-box">
+    <h3>단축키</h3>
+    <div class="keys">
+      <span><kbd>←</kbd> <kbd>→</kbd></span><span>그리드 페이지 / 확대 화면에서 카메라 넘김</span>
+      <span><kbd>1</kbd> <kbd>4</kbd> <kbd>9</kbd> <kbd>6</kbd></span><span>1 · 4 · 9 · 16 분할</span>
+      <span><kbd>Enter</kbd></span><span>첫 번째 알림 카메라(없으면 첫 화면) 확대</span>
+      <span><kbd>Esc</kbd></span><span>확대 화면·창 닫기</span>
+      <span><kbd>Space</kbd></span><span>AI 분석 켜기/끄기</span>
+      <span>드래그</span><span>타일을 끌어 다른 타일에 놓으면 순서 교환</span>
+    </div>
+    <div style="text-align:right;margin-top:14px"><button id="helpClose">닫기</button></div>
   </div>
 </div>
 
@@ -244,17 +308,33 @@ input[type=number]{width:48px;background:var(--surface-2);border:1px solid var(-
 "use strict";
 
 /* ===================================================================== 설정 */
-// AI 실행 엔진: GPU(WebGPU)가 있으면 GPU로, 없으면 CPU(WebAssembly)로 돌린다
 const ORT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js";
 const ORT_MJS = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs";
-const MODEL_URL = "model-pose640.gz.wasm"; // gzip 압축된 ONNX 모델 (서빙 형식 때문에 .wasm 이름 사용)
-const WASM_URL = "runtime-jsep.gz.wasm"; // gzip 압축된 ONNX Runtime WebAssembly
+const MODEL_URL = "model-pose640.gz.wasm";  // gzip 압축된 ONNX 모델 (서빙 형식 때문에 .wasm 이름)
+const WASM_URL = "runtime-jsep.gz.wasm";    // gzip 압축된 ONNX Runtime WebAssembly
 const IMG = 640;
-const SAMPLES = [
-  { name: "복도 A — 보행 중 낙상", src: "cam2" },
-  { name: "복도 B — 보행기 사용 중 낙상", src: "cam3" },
-  { name: "휴게실 — 풍선 놀이 중 낙상", src: "cam4" },
-  { name: "로비 — 산책 중 낙상", src: "cam5" },
+const SITES = {
+  "공사장": { color: "var(--site-con)", icon: "🏗" },
+  "요양병원": { color: "var(--site-care)", icon: "🏥" },
+  "공공장소": { color: "var(--site-pub)", icon: "🏙" },
+  "내 영상": { color: "var(--accent)", icon: "📁" },
+};
+const CAMERAS = [
+  ["요양병원", "2병동 복도", "care2.gif"],
+  ["요양병원", "재활 복도 (보행기)", "care3.gif"],
+  ["요양병원", "휴게실", "care4.gif"],
+  ["요양병원", "1층 로비", "care5.gif"],
+  ["요양병원", "식당", "care1.gif"],
+  ["공사장", "실내 설비 공사", "site1.gif"],
+  ["공사장", "타워크레인 하부", "site2.gif"],
+  ["공사장", "내부 마감 공사", "site3.gif"],
+  ["공공장소", "시내버스 내부", "pub_bus.gif"],
+  ["공공장소", "편의점 계산대", "pub_store.gif"],
+  ["공공장소", "상가 앞 거리", "pub_street.gif"],
+  ["공공장소", "ATM 부스", "pub_atm.gif"],
+  ["공공장소", "건물 복도", "pub_hall.gif"],
+  ["공공장소", "역 대합실", "pub_lobby.gif"],
+  ["공공장소", "사무실", "pub_office.gif"],
 ];
 const DEFAULTS = { conf: 0.25, confirm: 1.0, immobile: 8, countdown: 15 };
 
@@ -264,17 +344,127 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const clock = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
 const now = () => performance.now() / 1000;
+const hhmmss = (t) => new Date(t).toLocaleTimeString("en-GB", { hour12: false });
 
-const settings = Object.assign({}, DEFAULTS, store.get("cctv.settings", {}));
+const settings = Object.assign({}, DEFAULTS, store.get("jkb.settings", {}));
+const prefs = Object.assign({ priority: true, visible: true, eco: false, boxes: true }, store.get("jkb.prefs", {}));
 const state = {
-  cams: [], cols: 2, rows: 2, page: 0, viewer: null,
-  events: [], incidents: [], nextIncident: 1, aiOn: true, aiReady: false,
+  cams: [], order: [], site: "전체", cols: 4, rows: 4, page: 0, viewer: null,
+  events: [], evFilter: "all", incidents: [], nextIncident: 1, aiOn: true, aiReady: false, selected: null,
 };
 
+/* ============================================================ GIF 해석기
+   브라우저 기본 GIF 재생은 화면 밖에서 멈추거나 프레임을 고르기 어려워, 직접 프레임을 풀어 쓴다 */
+function parseGif(buf) {
+  const b = new Uint8Array(buf);
+  if (b[0] !== 0x47 || b[1] !== 0x49 || b[2] !== 0x46) throw new Error("GIF 파일이 아님");
+  let p = 6;
+  const W = b[p] | (b[p + 1] << 8), H = b[p + 2] | (b[p + 3] << 8), flags = b[p + 4];
+  p += 7;
+  let gct = null;
+  if (flags & 0x80) { const n = 3 * (1 << ((flags & 7) + 1)); gct = b.subarray(p, p + n); p += n; }
+  const frames = [];
+  let gce = { delay: 10, disposal: 0, trans: -1 };
+  const skipBlocks = () => { while (p < b.length && b[p] !== 0) p += b[p] + 1; p++; };
+  while (p < b.length) {
+    const t = b[p++];
+    if (t === 0x21) {
+      const label = b[p++];
+      if (label === 0xf9) {
+        const pf = b[p + 1];
+        gce = { disposal: (pf >> 2) & 7, delay: b[p + 2] | (b[p + 3] << 8), trans: (pf & 1) ? b[p + 4] : -1 };
+        p += b[p] + 1; skipBlocks();
+      } else skipBlocks();
+    } else if (t === 0x2c) {
+      const x = b[p] | (b[p + 1] << 8), y = b[p + 2] | (b[p + 3] << 8), w = b[p + 4] | (b[p + 5] << 8), h = b[p + 6] | (b[p + 7] << 8), f = b[p + 8];
+      p += 9;
+      let lct = null;
+      if (f & 0x80) { const n = 3 * (1 << ((f & 7) + 1)); lct = b.subarray(p, p + n); p += n; }
+      const minCode = b[p++], start = p;
+      skipBlocks();
+      frames.push({ x, y, w, h, lct, interlaced: !!(f & 0x40), minCode, start, ...gce });
+      gce = { delay: 10, disposal: 0, trans: -1 };
+    } else break; // 0x3B(끝) 또는 손상
+  }
+  if (!frames.length) throw new Error("GIF 프레임 없음");
+  return { W, H, gct, frames, b };
+}
+const LZ_PREFIX = new Int16Array(4096), LZ_SUFFIX = new Uint8Array(4096), LZ_STACK = new Uint8Array(4097);
+function lzw(b, p, minCode, count, out) {
+  const clear = 1 << minCode, eoi = clear + 1;
+  let size = minCode + 1, mask = (1 << size) - 1, next = eoi + 1, old = -1, first = 0;
+  for (let i = 0; i < clear; i++) { LZ_PREFIX[i] = -1; LZ_SUFFIX[i] = i; }
+  let datum = 0, bits = 0, left = 0, op = 0;
+  while (op < count) {
+    while (bits < size) {
+      if (left === 0) { left = b[p++]; if (!left) return op; }
+      datum |= b[p++] << bits; bits += 8; left--;
+    }
+    let code = datum & mask; datum >>>= size; bits -= size;
+    if (code === clear) { size = minCode + 1; mask = (1 << size) - 1; next = eoi + 1; old = -1; continue; }
+    if (code === eoi) break;
+    if (old === -1) { out[op++] = LZ_SUFFIX[code]; old = first = code; continue; }
+    const cur = code; let sp = 0;
+    if (code >= next) { LZ_STACK[sp++] = first; code = old; }
+    while (code >= clear) { LZ_STACK[sp++] = LZ_SUFFIX[code]; code = LZ_PREFIX[code]; }
+    first = LZ_SUFFIX[code]; LZ_STACK[sp++] = first;
+    while (sp > 0 && op < count) out[op++] = LZ_STACK[--sp];
+    if (next < 4096) { LZ_PREFIX[next] = old; LZ_SUFFIX[next] = first; next++; if ((next & mask) === 0 && next < 4096) { size++; mask = (1 << size) - 1; } }
+    old = cur;
+  }
+  return op;
+}
+class GifPlayer {
+  constructor(buf) {
+    this.g = parseGif(buf);
+    const { W, H } = this.g;
+    this.canvas = document.createElement("canvas"); this.canvas.width = W; this.canvas.height = H;
+    this.ctx = this.canvas.getContext("2d");
+    this.img = this.ctx.createImageData(W, H);
+    this.px = new Uint8Array(W * H);
+    this.i = -1; this.prev = null; this.saved = null; this.nextAt = 0;
+  }
+  get width() { return this.g.W; } get height() { return this.g.H; }
+  restart() { this.img.data.fill(0); this.i = -1; this.prev = null; this.saved = null; }
+  // 다음 프레임으로 진행. 반복 재생으로 처음으로 돌아가면 true
+  step() {
+    const { g } = this, d = this.img.data, W = g.W;
+    let wrapped = false;
+    if (++this.i >= g.frames.length) { this.restart(); this.i = 0; wrapped = true; }
+    const pr = this.prev;
+    if (pr) {
+      if (pr.disposal === 2) { for (let y = pr.y; y < pr.y + pr.h; y++) d.fill(0, (y * W + pr.x) * 4, (y * W + pr.x + pr.w) * 4); }
+      else if (pr.disposal === 3 && this.saved) d.set(this.saved);
+    }
+    const f = g.frames[this.i];
+    this.saved = f.disposal === 3 ? d.slice() : null;
+    const ct = f.lct || g.gct, n = f.w * f.h;
+    lzw(g.b, f.start, f.minCode, n, this.px);
+    const rowOf = f.interlaced ? interlaceRows(f.h) : null;
+    for (let r = 0, k = 0; r < f.h; r++) {
+      const y = f.y + (rowOf ? rowOf[r] : r);
+      if (y >= g.H) { k += f.w; continue; }
+      let o = (y * W + f.x) * 4;
+      for (let c = 0; c < f.w; c++, k++, o += 4) {
+        const ix = this.px[k];
+        if (ix === f.trans || f.x + c >= W) continue;
+        d[o] = ct[ix * 3]; d[o + 1] = ct[ix * 3 + 1]; d[o + 2] = ct[ix * 3 + 2]; d[o + 3] = 255;
+      }
+    }
+    this.ctx.putImageData(this.img, 0, 0);
+    this.prev = f;
+    const delay = f.delay < 2 ? 100 : f.delay * 10;
+    return { wrapped, delay };
+  }
+}
+function interlaceRows(h) {
+  const rows = []; for (const [s, st] of [[0, 8], [4, 8], [2, 4], [1, 2]]) for (let y = s; y < h; y += st) rows.push(y);
+  return rows;
+}
+
 /* ============================================================ 상황 판단 엔진
-   백엔드 app/situation.py 의 쓰러짐 판단 규칙을 그대로 옮김 */
+   백엔드 app/situation.py 의 쓰러짐 판단 규칙과 같음 */
 const CFG = {
   uprightAspect: 0.8, lyingAspect: 1.2, torsoLyingDeg: 60, torsoUprightDeg: 30,
   fallWindow: 1.0, fallDrop: 0.25, lyingConfirm: 3.0, motionRatio: 0.08,
@@ -391,8 +581,7 @@ function torsoAngle(kp) {
 }
 const engine = new Engine();
 
-/* =============================================================== 추적기
-   프레임 사이에 같은 사람에게 같은 번호를 붙인다 (겹침 비율 기준) */
+/* =============================================================== 추적기 */
 function iou(a, b) {
   const x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]), x2 = Math.min(a[2], b[2]), y2 = Math.min(a[3], b[3]);
   const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
@@ -474,22 +663,19 @@ async function startAI() {
       ai.workers.push(slot);
       return ready;
     };
-    // 첫 워커로 GPU 사용 가능 여부 확인 → GPU면 2개(전처리와 추론 겹치기), CPU면 코어 수만큼 병렬
     const first = await spawn(true);
     ai.ep = first.ep;
     if (first.gpuError) console.info("WebGPU 사용 불가, CPU로 실행:", first.gpuError);
     const extra = first.ep === "webgpu" ? 1 : Math.max(0, Math.min(4, (navigator.hardwareConcurrency || 4) - 1) - 1);
     await Promise.all(Array.from({ length: extra }, () => spawn(first.ep === "webgpu")));
     state.aiReady = true;
-    setBadge("live", first.ep === "webgpu" ? "AI 분석 중 · GPU" : "AI 분석 중 · CPU");
-    $("aiInfo").textContent = `YOLO11n-pose · 병렬 ${ai.workers.length}개`;
+    refreshAiBadge();
     renderEvents();
     schedule();
   } catch (err) {
     ai.error = err;
     setBadge("err", "AI 불러오기 실패");
-    $("aiInfo").textContent = "";
-    toast("AI를 불러오지 못했습니다: " + err.message + " — 영상은 재생되지만 분석은 꺼져 있습니다.", "critical", 9000);
+    toast("AI를 불러오지 못함: " + err.message + " — 영상은 재생되지만 분석은 꺼져 있음", "critical", 9000);
     console.error(err);
   }
 }
@@ -497,25 +683,29 @@ async function fetchGz(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${url} 다운로드 실패 (${r.status})`);
   const buf = await r.arrayBuffer(), head = new Uint8Array(buf, 0, 2);
-  if (head[0] !== 0x1f || head[1] !== 0x8b) return buf; // 서버가 이미 압축을 풀어서 보낸 경우
-  if (!("DecompressionStream" in window)) throw new Error("브라우저가 너무 오래되었습니다 (최신 Chrome·Safari·Edge 필요)");
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return buf;
+  if (!("DecompressionStream" in window)) throw new Error("브라우저가 너무 오래됨 (최신 Chrome·Safari·Edge 필요)");
   return await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
 }
 function setBadge(kind, text) { const b = $("aiBadge"); b.className = "badge " + kind; b.textContent = text; }
+function refreshAiBadge() {
+  if (!state.aiReady) return;
+  if (!state.aiOn) { setBadge("off", "AI 꺼짐"); return; }
+  setBadge("live", (ai.ep === "webgpu" ? "AI 분석 중 · GPU" : "AI 분석 중 · CPU") + (prefs.eco ? " · 절전" : ""));
+}
 
-/* 영상 1장 → 모델 입력 (640×640 레터박스, RGB 0~1, CHW) */
+/* 화면 1장 → 모델 입력 (640×640 레터박스, RGB 0~1, CHW) */
 const prepCanvas = document.createElement("canvas"); prepCanvas.width = prepCanvas.height = IMG;
 const prepCtx = prepCanvas.getContext("2d", { willReadFrequently: true });
-function preprocess(video) {
-  const vw = video.videoWidth, vh = video.videoHeight, s = Math.min(IMG / vw, IMG / vh);
+function preprocess(cam) {
+  const src = cam.src, vw = src.width, vh = src.height, s = Math.min(IMG / vw, IMG / vh);
   const nw = Math.round(vw * s), nh = Math.round(vh * s), px = (IMG - nw) / 2, py = (IMG - nh) / 2;
   prepCtx.fillStyle = "rgb(114,114,114)"; prepCtx.fillRect(0, 0, IMG, IMG);
-  prepCtx.drawImage(video, px, py, nw, nh);
-  const px8 = prepCtx.getImageData(0, 0, IMG, IMG).data, area = IMG * IMG, out = new Float32Array(3 * area);
-  for (let i = 0, j = 0; i < area; i++, j += 4) { out[i] = px8[j] / 255; out[i + area] = px8[j + 1] / 255; out[i + 2 * area] = px8[j + 2] / 255; }
+  prepCtx.drawImage(src.el, px, py, nw, nh);
+  const p8 = prepCtx.getImageData(0, 0, IMG, IMG).data, area = IMG * IMG, out = new Float32Array(3 * area);
+  for (let i = 0, j = 0; i < area; i++, j += 4) { out[i] = p8[j] / 255; out[i + area] = p8[j + 1] / 255; out[i + 2 * area] = p8[j + 2] / 255; }
   return { data: out, s, px, py, vw, vh };
 }
-/* 모델 출력 [1,56,N] → 사람 박스 + 관절 17개 */
 function decode(buf, n, meta) {
   const o = new Float32Array(buf), dets = [];
   for (let i = 0; i < n; i++) {
@@ -531,24 +721,41 @@ function decode(buf, n, meta) {
   for (const d of dets) if (keep.every((k) => iou(k.box, d.box) < 0.7)) keep.push(d);
   for (const d of keep) {
     d.box = [Math.max(0, d.box[0]), Math.max(0, d.box[1]), Math.min(meta.vw, d.box[2]), Math.min(meta.vh, d.box[3])];
-    if (![5, 6, 11, 12].every((k) => d.kc[k] >= 0.5)) d.kp = null; // 몸통 관절이 확실할 때만 자세 판단에 사용
+    if (![5, 6, 11, 12].every((k) => d.kc[k] >= 0.5)) d.kp = null;
   }
   return keep;
 }
 
-/* 비어 있는 워커에 '가장 오래 분석 안 된' 카메라를 배정 */
+/* 분석 순서: 알림 난 카메라 → 화면에 보이는 카메라 → 나머지 (가장 오래 안 본 것부터) */
+function engineHot(camId) {
+  for (const tr of engine.tracks.values()) if (tr.cam === camId && (tr.state === "suspect" || tr.state === "fallen" || (tr.state === "normal" && !tr.lostChecked && now() - tr.lastSeen < 2))) return true;
+  return false;
+}
+function priority(cam, t) {
+  let p = t - cam.lastRun;
+  if (cam.alert && cam.alert.until > Date.now()) p += 5;
+  if (engineHot(cam.id)) p += 4;          // 쓰러짐 의심·막 사라진 사람이 있으면 촘촘히
+  else if (cam.persons.length) p += 0.6;  // 사람이 있는 화면을 빈 화면보다 먼저
+  if (prefs.visible && !cam.visible) p -= 2.5;
+  return p;
+}
 function schedule() {
-  if (!state.aiReady) return;
+  if (!state.aiReady || !state.aiOn) return;
+  const t = now(), minGap = prefs.eco ? 0.5 : 0;
   for (const slot of ai.workers) {
-    if (slot.busy || !state.aiOn) continue;
-    const cam = state.cams.filter((c) => !c.inflight && c.video.readyState >= 2 && !c.video.paused).sort((a, b) => a.lastRun - b.lastRun)[0];
-    if (!cam) break;
+    if (slot.busy) continue;
+    const cands = state.cams.filter((c) => c.src && c.src.ready && !c.inflight && !c.aiOff && t - c.lastRun >= minGap);
+    if (!cands.length) break;
+    cands.sort((a, b) => priority(b, t) - priority(a, t));
+    const cam = cands[0];
+    if (prefs.visible && !cam.visible && t - cam.lastRun < 2.5) break; // 안 보이는 화면은 2.5초에 한 번
     runOn(slot, cam);
   }
 }
+setInterval(schedule, 120);
 function runOn(slot, cam) {
   cam.inflight = true; slot.busy = true;
-  const t = now(), meta = preprocess(cam.video), loopId = cam.loopId;
+  const t = now(), meta = preprocess(cam), loopId = cam.loopId;
   slot.cb = (m) => {
     cam.inflight = false; cam.lastRun = now();
     if (m.type === "result" && loopId === cam.loopId) {
@@ -564,149 +771,291 @@ function runOn(slot, cam) {
 }
 
 /* ============================================================== 카메라 */
-function addCamera(name, src, isUser) {
-  const video = document.createElement("video");
-  video.muted = true; video.loop = true; video.playsInline = true; video.autoplay = true; video.preload = "auto";
-  video.src = src;
-  const cam = { id: "cam" + (state.cams.length + 1), name, video, isUser, persons: [], tracker: new Tracker(), inflight: false, lastRun: 0, runs: [], loopId: 0, lastTime: 0, alert: null };
-  video.addEventListener("timeupdate", () => {
-    if (video.currentTime + 0.5 < cam.lastTime) resetCam(cam); // 반복 재생으로 처음으로 돌아감
-    cam.lastTime = video.currentTime;
-  });
-  video.addEventListener("canplay", () => { video.play().catch(() => {}); schedule(); }, { once: true });
-  state.cams.push(cam);
+function gifSource(player) {
+  return { kind: "gif", player, el: player.canvas, get width() { return player.width; }, get height() { return player.height; }, ready: true };
+}
+function videoSource(video) {
+  return { kind: "video", el: video, get width() { return video.videoWidth; }, get height() { return video.videoHeight; }, get ready() { return video.readyState >= 2 && !video.paused; } };
+}
+function addCamera(site, name, loader) {
+  const n = state.cams.length + 1;
+  const cam = { id: "cam" + n, no: String(n).padStart(2, "0"), site, name, src: null, error: null, persons: [], tracker: new Tracker(),
+    inflight: false, lastRun: 0, runs: [], loopId: 0, alert: null, aiOff: false, visible: false };
+  state.cams.push(cam); state.order.push(cam.id);
+  loader(cam).catch((e) => { cam.error = e.message; console.warn(name, e); renderGrid(); });
   return cam;
 }
-function resetCam(cam) { cam.loopId++; cam.persons = []; cam.tracker.reset(); engine.reset(cam.id); cam.alert = null; }
+async function loadGif(cam, url) {
+  const r = await fetch(url); if (!r.ok) throw new Error("영상을 불러오지 못함");
+  cam.src = gifSource(new GifPlayer(await r.arrayBuffer()));
+  cam.src.player.nextAt = performance.now() + Math.random() * 300;
+  renderGridIfVisible(cam);
+}
+async function loadGifBuffer(cam, buf) { cam.src = gifSource(new GifPlayer(buf)); renderGridIfVisible(cam); }
+async function loadVideo(cam, url) {
+  const v = document.createElement("video");
+  v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true; v.src = url;
+  v.addEventListener("timeupdate", () => { if (v.currentTime + 0.5 < (cam.lastTime || 0)) resetCam(cam); cam.lastTime = v.currentTime; });
+  await new Promise((res, rej) => { v.addEventListener("canplay", res, { once: true }); v.addEventListener("error", () => rej(new Error("재생할 수 없는 영상 형식")), { once: true }); });
+  await v.play().catch(() => {});
+  cam.src = videoSource(v);
+  renderGridIfVisible(cam);
+}
+function resetCam(cam) { cam.loopId++; cam.persons = []; cam.tracker.reset(); engine.reset(cam.id); }
+function renderGridIfVisible(cam) { if (cam.visible) renderGrid(); }
 
-/* ============================================================== 화면 그리기 */
-const views = new Set(); // {canvas, cam}
-function makeView(cam) { const c = document.createElement("canvas"); const v = { canvas: c, cam }; views.add(v); return v; }
+/* GIF 재생: 각 카메라를 자기 프레임 속도대로 진행 */
+function tickGifs(ts) {
+  for (const cam of state.cams) {
+    const p = cam.src && cam.src.kind === "gif" ? cam.src.player : null;
+    if (!p || ts < p.nextAt) continue;
+    const r = p.step();
+    if (r.wrapped) resetCam(cam);
+    p.nextAt = Math.max(p.nextAt + r.delay, ts); // 밀려도 몰아서 재생하지 않음
+  }
+}
+
+/* ============================================================ 화면 그리기 */
+const views = new Set();
+function makeView(cam) { const c = document.createElement("canvas"); views.add({ canvas: c, cam }); return c; }
 function drawView(v) {
   const { canvas, cam } = v, rect = canvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), W = Math.max(1, Math.round(rect.width * dpr)), H = Math.max(1, Math.round(rect.height * dpr));
+  if (!rect.width) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), W = Math.round(rect.width * dpr), H = Math.round(rect.height * dpr);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
-  const ctx = canvas.getContext("2d"), vid = cam.video;
+  const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-  if (vid.readyState < 2) return;
-  const s = Math.min(W / vid.videoWidth, H / vid.videoHeight), ox = (W - vid.videoWidth * s) / 2, oy = (H - vid.videoHeight * s) / 2;
-  ctx.drawImage(vid, ox, oy, vid.videoWidth * s, vid.videoHeight * s);
-  const X = (x) => ox + x * s, Y = (y) => oy + y * s, lw = Math.max(1.5, 2 * dpr), fs = Math.max(10, Math.round(12 * dpr));
-  ctx.font = `700 ${fs}px system-ui, sans-serif`; ctx.lineWidth = lw;
+  const src = cam.src; if (!src || !src.width) return;
+  const s = Math.min(W / src.width, H / src.height), ox = (W - src.width * s) / 2, oy = (H - src.height * s) / 2;
+  ctx.drawImage(src.el, ox, oy, src.width * s, src.height * s);
+  const X = (x) => ox + x * s, Y = (y) => oy + y * s, fs = Math.max(10, Math.round(11 * dpr));
+  ctx.font = `700 ${fs}px system-ui, sans-serif`; ctx.lineWidth = Math.max(1.5, 1.8 * dpr);
   const fallen = engine.fallen(cam.id);
-  for (const p of cam.persons) {
+  if (prefs.boxes && !cam.aiOff) for (const p of cam.persons) {
     const f = fallen.find((g) => g.visible && iou(g.box, p.box) > 0.3);
-    const color = f ? (f.state === "unresponsive" ? "#ef4444" : "#fb923c") : "#22c55e";
+    const color = f ? (f.state === "unresponsive" ? "#EF4444" : "#FB923C") : "#22C55E";
     ctx.strokeStyle = color; ctx.fillStyle = color;
     ctx.strokeRect(X(p.box[0]), Y(p.box[1]), (p.box[2] - p.box[0]) * s, (p.box[3] - p.box[1]) * s);
-    ctx.fillText(`#${p.id}`, X(p.box[0]) + 2, Y(p.box[1]) - 4);
-    if (p.kp) for (const k of [5, 6, 11, 12]) { ctx.beginPath(); ctx.arc(X(p.kp[k][0]), Y(p.kp[k][1]), 2.5 * dpr, 0, 7); ctx.fill(); }
   }
   for (const g of fallen) {
     if (g.visible) continue;
-    const color = g.state === "unresponsive" ? "#ef4444" : "#fb923c";
+    const color = g.state === "unresponsive" ? "#EF4444" : "#FB923C";
     ctx.strokeStyle = color; ctx.fillStyle = color; ctx.setLineDash([6 * dpr, 4 * dpr]);
     ctx.strokeRect(X(g.box[0]), Y(g.box[1]), (g.box[2] - g.box[0]) * s, (g.box[3] - g.box[1]) * s);
     ctx.setLineDash([]);
     ctx.fillText(g.state === "unresponsive" ? "NO MOTION" : "FALL?", X(g.box[0]) + 2, Y(g.box[1]) - 4);
   }
 }
-function renderLoop() {
+function loop(ts) {
+  tickGifs(ts);
   for (const v of views) { if (!v.canvas.isConnected) { views.delete(v); continue; } drawView(v); }
-  requestAnimationFrame(renderLoop);
+  requestAnimationFrame(loop);
 }
 
-/* =============================================================== 그리드 */
+/* ============================================================== 그리드 */
 const pageSize = () => state.cols * state.rows;
-const pageCount = () => Math.max(1, Math.ceil(state.cams.length / pageSize()));
-function setLayout(c, r) {
-  c = Math.min(6, Math.max(1, c | 0)); r = Math.min(6, Math.max(1, r | 0));
-  const first = state.page * pageSize(); state.cols = c; state.rows = r; state.page = Math.floor(first / pageSize());
-  store.set("cctv.layout", { cols: c, rows: r }); renderGrid();
+function filteredIds() {
+  let ids = state.order.filter((id) => { const c = camById(id); return state.site === "전체" || c.site === state.site; });
+  if (prefs.priority) {
+    const rank = (c) => (c.alert && c.alert.until > Date.now() ? (c.alert.level === "critical" ? 2 : 1) : 0);
+    ids = ids.map((id, i) => [id, i]).sort((a, b) => rank(camById(b[0])) - rank(camById(a[0])) || a[1] - b[1]).map((x) => x[0]);
+  }
+  return ids;
 }
+const camById = (id) => state.cams.find((c) => c.id === id);
+const pageCount = () => Math.max(1, Math.ceil((filteredIds().length + 1) / pageSize())); // +1: 추가 칸
+let lastGridKey = "";
 function renderGrid() {
-  const g = $("grid"); state.page = Math.min(state.page, pageCount() - 1);
-  g.style.gridTemplateColumns = `repeat(${state.cols},minmax(0,1fr))`; g.style.gridTemplateRows = `repeat(${state.rows},minmax(0,1fr))`;
+  const g = $("grid"), ids = filteredIds();
+  state.page = Math.min(state.page, pageCount() - 1);
+  g.style.gridTemplateColumns = `repeat(${state.cols},minmax(0,1fr))`;
+  g.style.gridTemplateRows = `repeat(${state.rows},minmax(0,1fr))`;
   g.replaceChildren();
   const start = state.page * pageSize();
+  state.cams.forEach((c) => (c.visible = false));
   for (let i = 0; i < pageSize(); i++) {
-    const cam = state.cams[start + i];
-    if (!cam) { const t = el("div", "tile empty", "빈 화면 — 위의 ＋ 버튼으로 영상 추가"); g.appendChild(t); continue; }
-    const t = el("div", "tile"); t.dataset.cam = cam.id;
-    t.appendChild(makeView(cam).canvas);
-    t.appendChild(el("div", "tile-name", cam.name));
-    const fps = el("div", "tile-fps mono", ""); fps.dataset.fps = cam.id; t.appendChild(fps);
-    const a = el("div", "tile-alert"); a.hidden = true; t.appendChild(a);
-    t.addEventListener("click", () => openViewer(start + i));
-    g.appendChild(t);
+    const id = ids[start + i];
+    if (!id) {
+      if (start + i === ids.length) {
+        const t = el("div", "tile add"); t.title = "GIF·영상 파일을 추가";
+        t.append(el("div", null)); t.firstChild.append(el("b", null, "＋"), document.createTextNode("카메라 추가 (GIF·영상)"));
+        t.addEventListener("click", () => $("fileInput").click()); g.appendChild(t);
+      } else g.appendChild(el("div", "tile blank"));
+      continue;
+    }
+    g.appendChild(buildTile(camById(id)));
   }
-  $("pageInfo").textContent = `${state.page + 1} / ${pageCount()}`;
-  document.querySelectorAll("[data-layout]").forEach((b) => b.classList.toggle("on", b.dataset.layout === `${state.cols}x${state.rows}`));
+  lastGridKey = ids.slice(start, start + pageSize()).join(",");
+  $("pageInfo").textContent = `${state.page + 1}/${pageCount()}`;
+  document.querySelectorAll("#layoutSeg button").forEach((b) => b.classList.toggle("on", b.dataset.layout === `${state.cols}x${state.rows}`));
   $("cols").value = state.cols; $("rows").value = state.rows;
   refreshTiles();
 }
-function changePage(d) { state.page = (state.page + d + pageCount()) % pageCount(); renderGrid(); }
-function camFps(cam) { const r = cam.runs.filter((x) => now() - x < 3); return r.length > 1 ? (r.length - 1) / (r[r.length - 1] - r[0]) : 0; }
-function refreshTiles() {
-  document.querySelectorAll(".tile[data-cam]").forEach((t) => {
-    const cam = state.cams.find((c) => c.id === t.dataset.cam); if (!cam) return;
-    const a = cam.alert && cam.alert.until > Date.now() ? cam.alert : null, box = t.querySelector(".tile-alert");
-    if (a) { t.dataset.level = a.level; box.textContent = a.message; box.hidden = false; } else { delete t.dataset.level; box.hidden = true; }
-    const f = t.querySelector("[data-fps]");
-    f.textContent = !state.aiReady ? "" : !state.aiOn ? "AI 꺼짐" : `AI ${camFps(cam).toFixed(1)}fps`;
+function buildTile(cam) {
+  cam.visible = true;
+  const t = el("div", "tile"); t.dataset.cam = cam.id; t.draggable = true;
+  if (cam.src) t.appendChild(makeView(cam)); else t.appendChild(el("div", "loading", cam.error ? "⚠ " + cam.error : "영상 불러오는 중…"));
+  const top = el("div", "tile-top"), site = SITES[cam.site];
+  const siteEl = el("span", "site", cam.site); siteEl.style.color = site.color;
+  top.append(el("span", "no", "CAM " + cam.no), el("span", "nm", cam.name), siteEl);
+  const bot = el("div", "tile-bot");
+  bot.append(el("span", "ppl", ""), el("span", "fps mono", ""));
+  const acts = el("div", "tile-acts");
+  const bZoom = el("button", null, "⤢ 확대"), bAi = el("button", null, "");
+  bZoom.addEventListener("click", (e) => { e.stopPropagation(); openViewer(cam.id); });
+  bAi.addEventListener("click", (e) => { e.stopPropagation(); toggleCamAi(cam); });
+  acts.append(bZoom, bAi);
+  const alert = el("div", "tile-alert"); alert.hidden = true;
+  t.append(top, bot, acts, alert);
+  t.addEventListener("click", () => openViewer(cam.id));
+  t.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", cam.id); e.dataTransfer.effectAllowed = "move"; });
+  t.addEventListener("dragover", (e) => { e.preventDefault(); t.classList.add("dragover"); });
+  t.addEventListener("dragleave", () => t.classList.remove("dragover"));
+  t.addEventListener("drop", (e) => {
+    e.preventDefault(); t.classList.remove("dragover");
+    const from = e.dataTransfer.getData("text/plain"); if (!from || from === cam.id) return;
+    const a = state.order.indexOf(from), b = state.order.indexOf(cam.id);
+    [state.order[a], state.order[b]] = [state.order[b], state.order[a]];
+    renderGrid();
   });
-  if (ai.ms.length) $("aiInfo").textContent = `YOLO11n-pose · ${ai.ep === "webgpu" ? "GPU" : "CPU"} ${ai.workers.length}개 · 1장 ${Math.round(ai.ms.reduce((a, b) => a + b, 0) / ai.ms.length)}ms`;
+  return t;
+}
+function changePage(d) { state.page = (state.page + d + pageCount()) % pageCount(); renderGrid(); }
+function setLayout(c, r) {
+  c = Math.min(6, Math.max(1, c | 0)); r = Math.min(6, Math.max(1, r | 0));
+  const first = state.page * pageSize(); state.cols = c; state.rows = r; state.page = Math.floor(first / pageSize());
+  store.set("jkb.layout", { cols: c, rows: r }); renderGrid();
+}
+function camFps(cam) { const r = cam.runs.filter((x) => now() - x < 3); return r.length > 1 ? (r.length - 1) / (r[r.length - 1] - r[0]) : 0; }
+function levelOf(cam) { return cam.alert && cam.alert.until > Date.now() ? cam.alert.level : null; }
+function refreshTiles() {
+  // 알림 우선 정렬로 순서가 바뀌었으면 그리드를 다시 그림
+  const ids = filteredIds(), start = state.page * pageSize();
+  if (ids.slice(start, start + pageSize()).join(",") !== lastGridKey) { renderGrid(); return; }
+  document.querySelectorAll(".tile[data-cam]").forEach((t) => {
+    const cam = camById(t.dataset.cam); if (!cam) return;
+    if (cam.src && !t.querySelector("canvas")) { renderGrid(); return; }
+    const lv = levelOf(cam), box = t.querySelector(".tile-alert");
+    if (lv) { t.dataset.level = lv; box.textContent = cam.alert.message; box.hidden = false; } else { delete t.dataset.level; box.hidden = true; }
+    t.classList.toggle("aioff", cam.aiOff);
+    t.querySelector(".ppl").textContent = !state.aiReady || cam.aiOff || !state.aiOn ? "" : `사람 ${cam.persons.length}`;
+    t.querySelector(".fps").textContent = !state.aiReady ? "" : cam.aiOff ? "AI 꺼짐" : !state.aiOn ? "" : `AI ${camFps(cam).toFixed(1)}fps`;
+    t.querySelector(".tile-acts button:last-child").textContent = cam.aiOff ? "▶ AI 켜기" : "⏸ AI 끄기";
+  });
+  renderSide();
+  const active = state.cams.filter((c) => c.src && !c.aiOff && state.aiOn && camFps(c) > 0).length;
+  $("sbCams").textContent = `${state.cams.filter((c) => c.src).length}/${state.cams.length}`;
+  $("sbAi").textContent = state.aiReady ? `${active}대` : "-";
+  $("sbPpl").textContent = state.cams.reduce((s, c) => s + (c.aiOff ? 0 : c.persons.length), 0) + "명";
+  $("sbInc").textContent = state.incidents.filter((x) => x.status === "pending").length + "건";
+  if (ai.ms.length) $("aiInfo").textContent = `1장 ${Math.round(ai.ms.reduce((a, b) => a + b, 0) / ai.ms.length)}ms`;
+}
+function toggleCamAi(cam) {
+  cam.aiOff = !cam.aiOff;
+  if (cam.aiOff) { cam.persons = []; }
+  toast(`CAM ${cam.no} ${cam.name} · AI ${cam.aiOff ? "끔" : "켬"}`, "ok", 2500);
+  refreshTiles(); if (state.viewer === cam.id) renderViewer();
+}
+
+/* ============================================================ 카메라 목록 */
+function renderSide() {
+  const list = $("camList"), groups = {};
+  for (const id of state.order) { const c = camById(id); (groups[c.site] = groups[c.site] || []).push(c); }
+  $("camCount").textContent = state.cams.length + "대";
+  const frag = document.createDocumentFragment();
+  for (const [site, cams] of Object.entries(groups)) {
+    const g = el("div", "side-group"), h = el("h4");
+    const nm = el("span", null, `${SITES[site].icon} ${site}`);
+    const alerts = cams.filter((c) => levelOf(c)).length;
+    h.append(nm, el("span", "mono", alerts ? `알림 ${alerts}` : `${cams.length}대`));
+    if (alerts) h.lastChild.style.color = "var(--crit)";
+    g.appendChild(h);
+    for (const c of cams) {
+      const r = el("div", "cam-row"); const lv = levelOf(c);
+      if (lv) r.dataset.level = lv;
+      r.classList.toggle("aioff", c.aiOff); r.classList.toggle("sel", state.viewer === c.id);
+      const nmw = el("div", "nm"); nmw.append(el("b", null, c.name), el("span", "mono", "CAM " + c.no));
+      r.append(el("span", "st"), nmw, el("span", "ppl", c.aiOff ? "꺼짐" : state.aiReady && state.aiOn ? `${c.persons.length}명` : ""));
+      r.title = "클릭: 확대 보기";
+      r.addEventListener("click", () => openViewer(c.id));
+      g.appendChild(r);
+    }
+    frag.appendChild(g);
+  }
+  list.replaceChildren(frag);
+}
+function renderSiteFilter() {
+  const seg = $("siteFilter"); seg.replaceChildren();
+  const counts = { 전체: state.cams.length };
+  for (const c of state.cams) counts[c.site] = (counts[c.site] || 0) + 1;
+  for (const k of Object.keys(counts)) {
+    const b = el("button");
+    if (k !== "전체") { const d = el("span", "chip-dot"); d.style.background = SITES[k].color; b.appendChild(d); }
+    b.append(`${k} ${counts[k]}`); b.classList.toggle("on", state.site === k);
+    b.addEventListener("click", () => { state.site = k; state.page = 0; renderSiteFilter(); renderGrid(); });
+    seg.appendChild(b);
+  }
 }
 
 /* ============================================================= 확대 보기 */
-function openViewer(i) { state.viewer = i; $("viewer").hidden = false; renderViewer(); }
-function closeViewer() { state.viewer = null; $("viewer").hidden = true; $("stage").replaceChildren(); }
+function viewerIds() { return filteredIds(); }
+function openViewer(id) { state.viewer = id; $("viewer").hidden = false; renderViewer(); renderStrip(); }
+function closeViewer() { state.viewer = null; $("viewer").hidden = true; $("stage").replaceChildren(); $("strip").replaceChildren(); refreshTiles(); }
 function renderViewer() {
-  const cam = state.cams[state.viewer]; if (!cam) return closeViewer();
-  $("vName").textContent = cam.name; $("vIndex").textContent = `${state.viewer + 1} / ${state.cams.length}`;
-  $("stage").replaceChildren(makeView(cam).canvas);
+  const cam = camById(state.viewer); if (!cam) return closeViewer();
+  const ids = viewerIds(), i = ids.indexOf(cam.id);
+  $("vName").textContent = `CAM ${cam.no} · ${cam.name}`;
+  $("vIndex").textContent = `${cam.site} · ${i + 1} / ${ids.length}`;
+  $("vAi").textContent = cam.aiOff ? "▶ AI 켜기" : "⏸ AI 끄기";
+  $("stage").replaceChildren(cam.src ? makeView(cam) : el("div", "loading", "영상 불러오는 중…"));
+  document.querySelectorAll("#strip button").forEach((b) => b.classList.toggle("on", b.dataset.cam === cam.id));
+}
+function renderStrip() {
+  const s = $("strip"); s.replaceChildren();
+  for (const id of viewerIds()) {
+    const c = camById(id), b = el("button"); b.dataset.cam = id; b.title = c.name;
+    if (c.src) b.appendChild(makeView(c)); b.appendChild(el("span", null, "CAM " + c.no));
+    b.addEventListener("click", () => { state.viewer = id; renderViewer(); });
+    s.appendChild(b);
+  }
+  renderViewer();
 }
 function moveViewer(d) {
   if (state.viewer == null) return;
-  const st = $("stage"); st.classList.add(d > 0 ? "out-l" : "out-r");
-  setTimeout(() => { state.viewer = (state.viewer + d + state.cams.length) % state.cams.length; renderViewer(); st.classList.remove("out-l", "out-r"); }, 140);
+  const ids = viewerIds(), i = ids.indexOf(state.viewer), st = $("stage");
+  st.classList.add(d > 0 ? "out-l" : "out-r");
+  setTimeout(() => { state.viewer = ids[(i + d + ids.length) % ids.length]; renderViewer(); st.classList.remove("out-l", "out-r"); }, 130);
 }
 
 /* =============================================================== 이벤트 */
 function addEvent(ev) {
-  state.events.unshift(ev); state.events = state.events.slice(0, 100);
-  const cam = state.cams.find((c) => c.id === ev.cam);
-  if (cam) cam.alert = { level: ev.severity, message: ev.message, until: Date.now() + (ev.severity === "critical" ? 60000 : 20000) };
+  state.events.unshift(ev); state.events = state.events.slice(0, 150);
+  const cam = camById(ev.cam);
+  if (cam) cam.alert = { level: ev.severity, message: ev.message, until: Date.now() + (ev.severity === "critical" ? 60000 : 25000) };
   renderEvents(); refreshTiles();
-  if (ev.severity !== "critical") toast(`${cam ? cam.name : ev.cam} · ${ev.message}`, ev.severity);
+  if (ev.severity !== "critical") toast(`CAM ${cam ? cam.no : ""} ${cam ? cam.name : ""} · ${ev.message}`, ev.severity);
   if (ev.emergency) openIncident(ev);
 }
 function renderEvents() {
   const list = $("eventList"); list.replaceChildren();
-  $("eventCount").textContent = `${state.events.length}건`;
-  if (!state.events.length) {
-    list.appendChild(el("li", "empty-msg", state.aiReady ? "AI가 영상을 분석하고 있습니다. 쓰러짐이 감지되면 여기에 표시됩니다." : "AI 모델을 불러오는 중입니다…"));
-    return;
-  }
-  for (const ev of state.events) {
-    const cam = state.cams.find((c) => c.id === ev.cam);
-    const li = el("li", "ev " + ev.severity), top = el("div", "ev-top");
-    top.append(el("span", null, cam ? cam.name : ev.cam), el("span", "mono", new Date(ev.time).toLocaleTimeString("en-GB", { hour12: false })));
+  const f = state.evFilter;
+  const items = state.events.filter((e) => f === "all" || (f === "log" ? e.severity === "ok" || e.log : e.severity === f));
+  $("evBadge").textContent = state.events.length ? `(${state.events.length})` : "";
+  if (!items.length) { list.appendChild(el("li", "empty", !state.aiReady ? "AI 모델을 불러오는 중…" : state.events.length ? "이 조건의 이벤트 없음" : "AI가 15개 화면을 분석 중. 쓰러짐이 감지되면 여기에 표시됨")); return; }
+  for (const ev of items) {
+    const cam = camById(ev.cam), li = el("li", "ev " + ev.severity), top = el("div", "ev-top");
+    top.append(el("span", null, cam ? `CAM ${cam.no} · ${cam.name}` : ev.cam), el("span", "mono", hhmmss(ev.time)));
     li.append(top, el("div", "ev-msg", ev.message));
     if (ev.note) li.appendChild(el("div", "ev-sub", ev.note));
-    li.addEventListener("click", () => { const i = state.cams.indexOf(cam); if (i >= 0) openViewer(i); });
+    li.addEventListener("click", () => cam && openViewer(cam.id));
     list.appendChild(li);
   }
 }
 
 /* ============================================================ 긴급 신고 */
 function openIncident(ev) {
-  // 같은 카메라에서 대기 중인 사건이 있으면 새 창 대신 격상 (쓰러짐 → 무반응)
   const open = state.incidents.find((x) => x.status === "pending" && x.ev.cam === ev.cam);
-  if (open) {
-    if (ev.severity === "critical" && open.ev.severity !== "critical") { open.ev = ev; renderIncident(); }
-    return;
-  }
+  if (open) { if (ev.severity === "critical" && open.ev.severity !== "critical") { open.ev = ev; renderIncident(); } return; }
   state.incidents.push({ id: state.nextIncident++, ev, status: "pending", deadline: Date.now() + settings.countdown * 1000, total: settings.countdown * 1000 });
   renderIncident();
 }
@@ -714,16 +1063,13 @@ let shownId = null;
 function renderIncident() {
   const pending = state.incidents.filter((x) => x.status === "pending");
   if (!pending.length) { $("emg").hidden = true; shownId = null; $("emgFeed").replaceChildren(); return; }
-  const inc = pending[0], cam = state.cams.find((c) => c.id === inc.ev.cam);
+  const inc = pending[0], cam = camById(inc.ev.cam);
   $("emg").hidden = false;
-  if (shownId !== inc.id) {
-    shownId = inc.id;
-    $("emgFeed").replaceChildren(cam ? makeView(cam).canvas : el("div"));
-  }
+  if (shownId !== inc.id) { shownId = inc.id; $("emgFeed").replaceChildren(cam && cam.src ? makeView(cam) : el("div")); }
   const critical = inc.ev.severity === "critical";
   $("emgTitle").textContent = critical ? "긴급 상황 — 119 구급" : "쓰러짐 감지 — 119 신고 대기";
   $("emgMsg").textContent = inc.ev.message;
-  $("emgCam").textContent = `${cam ? cam.name : ""} · ${new Date(inc.ev.time).toLocaleTimeString("en-GB", { hour12: false })}`;
+  $("emgCam").textContent = `CAM ${cam ? cam.no : ""} ${cam ? cam.name : ""} (${cam ? cam.site : ""}) · ${hhmmss(inc.ev.time)}`;
   $("emgQueue").textContent = pending.length > 1 ? `· 대기 중 ${pending.length - 1}건 더` : "";
   tickIncident();
 }
@@ -737,61 +1083,83 @@ function tickIncident() {
 function resolve(inc, status, by) {
   if (inc.status !== "pending") return;
   inc.status = status;
-  const cam = state.cams.find((c) => c.id === inc.ev.cam), name = cam ? cam.name : "";
+  const cam = camById(inc.ev.cam), name = cam ? `CAM ${cam.no} ${cam.name}` : "";
   if (status === "dispatched") {
     toast(`☎ 119 신고 발송 (${by}, 시연) · ${name}`, "critical");
-    state.events.unshift({ cam: inc.ev.cam, severity: "critical", message: `119 신고 발송 — ${by} (시연, 실제 발송 안 됨)`, time: Date.now(), note: "현장 주소·카메라 위치·발생 시각 포함" });
+    state.events.unshift({ cam: inc.ev.cam, severity: "critical", log: true, message: `119 신고 발송 — ${by} (시연, 실제 발송 안 됨)`, time: Date.now(), note: "현장·카메라 위치·발생 시각 포함" });
   } else {
     toast(`신고 취소 (오탐 처리) · ${name}`, "ok");
-    state.events.unshift({ cam: inc.ev.cam, severity: "ok", message: "관리자가 오탐으로 신고 취소", time: Date.now() });
+    state.events.unshift({ cam: inc.ev.cam, severity: "ok", log: true, message: "관리자가 오탐으로 신고 취소", time: Date.now() });
+    if (cam) cam.alert = null;
   }
-  renderEvents(); renderIncident();
+  renderEvents(); renderIncident(); refreshTiles();
 }
 
-function toast(text, level = "info", ms = 5000) { const t = el("div", "toast " + level, text); $("toasts").appendChild(t); setTimeout(() => t.remove(), ms); }
+function toast(text, level = "info", ms = 4500) { const t = el("div", "toast " + level, text); $("toasts").appendChild(t); setTimeout(() => t.remove(), ms); }
 
 /* =============================================================== 설정 */
 function bindSettings() {
   const map = [["sConf", "vConf", "conf", (v) => v.toFixed(2)], ["sConfirm", "vConfirm", "confirm", (v) => v.toFixed(1) + "초"], ["sImmobile", "vImmobile", "immobile", (v) => v + "초"], ["sCountdown", "vCountdown", "countdown", (v) => v + "초"]];
   const sync = () => map.forEach(([s, v, k, f]) => { $(s).value = settings[k]; $(v).textContent = f(settings[k]); });
-  map.forEach(([s, v, k, f]) => $(s).addEventListener("input", () => { settings[k] = +$(s).value; $(v).textContent = f(settings[k]); store.set("cctv.settings", settings); }));
-  $("resetSettings").addEventListener("click", () => { Object.assign(settings, DEFAULTS); store.set("cctv.settings", settings); sync(); toast("감지 설정을 기본값으로 되돌렸습니다", "ok"); });
+  map.forEach(([s, v, k, f]) => $(s).addEventListener("input", () => { settings[k] = +$(s).value; $(v).textContent = f(settings[k]); store.set("jkb.settings", settings); }));
+  $("resetSettings").addEventListener("click", () => { Object.assign(settings, DEFAULTS); store.set("jkb.settings", settings); sync(); toast("감지 설정을 기본값으로 되돌림", "ok"); });
   sync();
+  for (const [id, key, msg] of [["tgPriority", "priority", "알림 화면 맨 앞으로"], ["tgVisible", "visible", "보이는 화면 우선 분석"], ["tgEco", "eco", "절전 모드"], ["tgBoxes", "boxes", "사람 박스 표시"]]) {
+    const b = $(id), apply = () => { b.classList.toggle("on", prefs[key]); b.setAttribute("aria-pressed", prefs[key]); };
+    apply();
+    b.addEventListener("click", () => { prefs[key] = !prefs[key]; store.set("jkb.prefs", prefs); apply(); refreshAiBadge(); renderGrid(); toast(`${msg} ${prefs[key] ? "켬" : "끔"}`, "ok", 2000); });
+  }
 }
 
 /* =============================================================== 초기화 */
+function setAi(on) {
+  state.aiOn = on; const b = $("aiToggle");
+  b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); b.textContent = on ? "AI 분석 켜짐" : "AI 분석 꺼짐";
+  if (!on) state.cams.forEach((c) => (c.persons = []));
+  refreshAiBadge(); refreshTiles(); if (on) schedule();
+}
+function addFiles(files) {
+  for (const f of files) {
+    const url = URL.createObjectURL(f);
+    if (f.type === "image/gif" || /\.gif$/i.test(f.name)) addCamera("내 영상", f.name, async (cam) => loadGifBuffer(cam, await f.arrayBuffer()));
+    else addCamera("내 영상", f.name, (cam) => loadVideo(cam, url));
+  }
+  state.site = "전체"; renderSiteFilter(); state.page = pageCount() - 1; renderGrid();
+  toast(`영상 ${files.length}개 추가 — AI가 바로 분석 시작`, "ok");
+}
 function bindUI() {
-  document.querySelectorAll("[data-layout]").forEach((b) => b.addEventListener("click", () => { const [c, r] = b.dataset.layout.split("x").map(Number); setLayout(c, r); }));
+  document.querySelectorAll("#layoutSeg button").forEach((b) => b.addEventListener("click", () => { const [c, r] = b.dataset.layout.split("x").map(Number); setLayout(c, r); }));
   $("applyLayout").addEventListener("click", () => setLayout(+$("cols").value, +$("rows").value));
   $("prevPage").addEventListener("click", () => changePage(-1));
   $("nextPage").addEventListener("click", () => changePage(1));
   $("vClose").addEventListener("click", closeViewer);
   $("vPrev").addEventListener("click", () => moveViewer(-1));
   $("vNext").addEventListener("click", () => moveViewer(1));
+  $("vAi").addEventListener("click", () => { const c = camById(state.viewer); if (c) toggleCamAi(c); });
   $("emgCancel").addEventListener("click", () => { const i = state.incidents.find((x) => x.id === shownId); if (i) resolve(i, "cancelled", "관리자"); });
   $("emgConfirm").addEventListener("click", () => { const i = state.incidents.find((x) => x.id === shownId); if (i) resolve(i, "dispatched", "관리자"); });
-  $("clearEvents").addEventListener("click", () => { state.events = []; renderEvents(); toast("AI 이벤트 목록을 지웠습니다", "ok"); });
-  $("addVideo").addEventListener("click", () => $("fileInput").click());
-  $("fileInput").addEventListener("change", (e) => {
-    const files = [...e.target.files]; if (!files.length) return;
-    for (const f of files) addCamera("내 영상 — " + f.name, URL.createObjectURL(f), true);
-    state.page = pageCount() - 1; renderGrid(); toast(`영상 ${files.length}개를 추가했습니다. AI가 바로 분석을 시작합니다.`, "ok");
-    e.target.value = "";
-  });
-  $("restart").addEventListener("click", () => { for (const c of state.cams) { c.video.currentTime = 0; resetCam(c); c.video.play().catch(() => {}); } toast("모든 영상을 처음부터 다시 재생합니다", "ok"); });
-  $("aiToggle").addEventListener("click", () => {
-    state.aiOn = !state.aiOn; const b = $("aiToggle");
-    b.classList.toggle("on", state.aiOn); b.setAttribute("aria-pressed", state.aiOn); b.textContent = state.aiOn ? "AI 분석 켜짐" : "AI 분석 꺼짐";
-    if (state.aiOn) schedule();
-  });
+  $("clearEvents").addEventListener("click", () => { state.events = []; renderEvents(); toast("이벤트 목록을 지움", "ok", 2000); });
+  document.querySelectorAll("#evFilter button").forEach((b) => b.addEventListener("click", () => { state.evFilter = b.dataset.f; document.querySelectorAll("#evFilter button").forEach((x) => x.classList.toggle("on", x === b)); renderEvents(); }));
+  $("addBtn2").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", (e) => { const files = [...e.target.files]; if (files.length) addFiles(files); e.target.value = ""; });
+  $("aiToggle").addEventListener("click", () => setAi(!state.aiOn));
+  $("helpBtn").addEventListener("click", () => ($("helpModal").hidden = false));
+  $("helpClose").addEventListener("click", () => ($("helpModal").hidden = true));
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
     ["events", "settings", "help"].forEach((n) => { $("pane-" + n).hidden = n !== b.dataset.tab; });
   }));
   document.addEventListener("keydown", (e) => {
-    if (e.target.matches("input,select") || !$("emg").hidden) return;
-    if (state.viewer != null) { if (e.key === "Escape") closeViewer(); if (e.key === "ArrowLeft") moveViewer(-1); if (e.key === "ArrowRight") moveViewer(1); }
-    else { if (e.key === "ArrowLeft") changePage(-1); if (e.key === "ArrowRight") changePage(1); }
+    if (e.target.matches("input,select,textarea")) return;
+    if (!$("emg").hidden) return;
+    if (e.key === "Escape") { if (!$("helpModal").hidden) $("helpModal").hidden = true; else if (state.viewer) closeViewer(); return; }
+    if (e.key === "?") { $("helpModal").hidden = !$("helpModal").hidden; return; }
+    if (e.key === " ") { e.preventDefault(); setAi(!state.aiOn); return; }
+    if (state.viewer) { if (e.key === "ArrowLeft") moveViewer(-1); if (e.key === "ArrowRight") moveViewer(1); return; }
+    if (e.key === "ArrowLeft") changePage(-1);
+    if (e.key === "ArrowRight") changePage(1);
+    if (e.key === "Enter") { const ids = filteredIds(); const a = ids.find((id) => levelOf(camById(id))) || ids[0]; if (a) openViewer(a); }
+    const lay = { 1: [1, 1], 4: [2, 2], 9: [3, 3], 6: [4, 4] }[e.key]; if (lay) setLayout(...lay);
   });
   let sx = null; const st = $("stage");
   st.addEventListener("pointerdown", (e) => { sx = e.clientX; });
@@ -800,15 +1168,13 @@ function bindUI() {
 
 function init() {
   bindUI(); bindSettings();
-  const l = store.get("cctv.layout", { cols: 2, rows: 2 }); state.cols = l.cols; state.rows = l.rows;
-  // 브라우저가 재생할 수 있는 형식 선택 (H.264 MP4 우선, 안 되면 WebM)
-  const ext = document.createElement("video").canPlayType('video/mp4; codecs="avc1.42E01E"') ? ".mp4" : ".webm";
-  for (const s of SAMPLES) addCamera(s.name, s.src + ext, false);
-  renderGrid(); renderEvents();
+  const l = store.get("jkb.layout", { cols: 4, rows: 4 }); state.cols = l.cols; state.rows = l.rows;
+  for (const [site, name, file] of CAMERAS) addCamera(site, name, (cam) => loadGif(cam, "gif/" + file));
+  renderSiteFilter(); renderGrid(); renderEvents();
   setInterval(refreshTiles, 500); setInterval(tickIncident, 250);
-  requestAnimationFrame(renderLoop);
+  requestAnimationFrame(loop);
   startAI();
-  window.__cctv = { state, engine, ai }; // 점검용
+  window.__jkb = { state, engine, ai }; // 점검용
 }
 init();
 })();
