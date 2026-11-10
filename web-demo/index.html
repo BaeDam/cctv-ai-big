@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>지켜봄 관제</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
@@ -127,6 +132,29 @@ kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px sol
 .help b{color:var(--fg)}
 .help ul{padding-left:18px;margin:6px 0}
 
+/* ---------- 동작 학습 ---------- */
+.learn label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+.learn input[type=text],.learn select{width:100%;background:var(--s2);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.learn .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rec-box{margin:10px 0;padding:10px;border-radius:8px;background:var(--s2);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.rec-box .cd{font-size:28px;font-weight:900;text-align:center;font-family:var(--mono)}
+.rec-box .cd.go{color:var(--crit)}
+.samples{display:flex;gap:4px;flex-wrap:wrap}
+.samples span{width:22px;height:22px;border-radius:5px;background:var(--s3);display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.samples span.ok{background:var(--accent);color:#fff}
+.act{padding:8px 10px;border-radius:8px;background:var(--s2);border:1px solid var(--line);margin-bottom:6px;display:flex;flex-direction:column;gap:6px}
+.act .h{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.act .h b{font-size:13px}
+.act .meta{font-size:11.5px;color:var(--muted)}
+.meter{height:6px;background:var(--s3);border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);width:0}
+.meter.hit i{background:var(--crit)}
+.btns{display:flex;gap:6px;flex-wrap:wrap}
+.btns button{font-size:12px}
+.tile.add .opts{display:flex;flex-direction:column;gap:8px;align-items:center}
+.tile.add .opts button{font-size:13px}
+.tile.add .opts .cam{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;padding:8px 14px}
+
 /* ---------- 확대·긴급·도움말 ---------- */
 .viewer{position:fixed;inset:0;z-index:20;background:rgba(5,8,12,.96);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .viewer-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:10px;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
@@ -179,7 +207,8 @@ kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px sol
   .statusbar .kbd{display:none}
 }
 </style>
-
+</head>
+<body>
 <header class="top">
   <div class="brand"><span class="rec"></span>지켜봄 <small>AI CCTV 관제</small></div>
   <div class="seg" id="siteFilter" role="group" aria-label="현장 필터"></div>
@@ -215,12 +244,13 @@ kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px sol
     <div class="tabs" role="tablist">
       <button class="on" data-tab="events" role="tab">이벤트 <span id="evBadge" class="mono"></span></button>
       <button data-tab="settings" role="tab">설정</button>
+      <button data-tab="learn" role="tab">동작 학습</button>
       <button data-tab="help" role="tab">안내</button>
     </div>
     <div id="pane-events" class="pane">
       <div class="pane-head">
         <div class="seg" id="evFilter"><button class="on" data-f="all">전체</button><button data-f="critical">긴급</button><button data-f="danger">위험</button><button data-f="log">처리</button></div>
-        <button id="clearEvents">모두 지우기</button>
+        <div class="group"><button id="exportLog" title="저장된 분석 기록을 CSV로 내려받기">기록 CSV</button><button id="clearEvents">모두 지우기</button></div>
       </div>
       <ul id="eventList" style="margin:0;padding:0"></ul>
     </div>
@@ -236,11 +266,40 @@ kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px sol
       <div class="setting"><label for="sCountdown">자동 신고 카운트다운 <span id="vCountdown" class="mono"></span></label><input id="sCountdown" type="range" min="5" max="30" step="1"><small>기본 15초</small></div>
       <button id="resetSettings">기본값으로</button>
     </div>
+    <div id="pane-learn" class="pane learn" hidden>
+      <p class="help" style="margin:0 0 6px">카메라 앞에서 동작을 여러 번 보여 주면 <b>관절 움직임 패턴을 저장</b>하고, 이후 같은 동작이 나오면 알아봄. 웹캠 칸(16번)에서 쓰는 것을 권장.</p>
+      <label for="lCam">기록할 카메라</label><select id="lCam"></select>
+      <label for="lName">동작 이름</label><input id="lName" type="text" maxlength="20" placeholder="예: 구조 요청 (두 손 흔들기)">
+      <div class="row2">
+        <div><label for="lSev">위험도</label><select id="lSev"><option value="info">알림</option><option value="danger" selected>위험</option><option value="critical">긴급</option></select></div>
+        <div><label for="lCall">호출</label><select id="lCall"><option value="">없음</option><option value="119">119</option><option value="112">112</option></select></div>
+      </div>
+      <div class="row2">
+        <div><label for="lDur">동작 길이</label><select id="lDur"><option value="1">1초</option><option value="2" selected>2초</option><option value="3">3초</option></select></div>
+        <div><label for="lScope">인식할 카메라</label><select id="lScope"><option value="rec" selected>기록한 카메라만</option><option value="all">모든 카메라</option></select></div>
+      </div>
+      <div class="rec-box">
+        <div class="cd" id="lCd">준비</div>
+        <div class="samples" id="lSamples"></div>
+        <div class="btns"><button id="lRec" class="on">● 샘플 기록 (3초 뒤 시작)</button><button id="lUndo">마지막 취소</button></div>
+        <button id="lSave" disabled>저장 (샘플 3개 이상)</button>
+      </div>
+      <div class="pane-head" style="margin-top:6px"><b>저장된 동작</b><div class="btns"><button id="lExport">내보내기</button><button id="lImport">가져오기</button></div></div>
+      <div id="lList"></div>
+      <div class="setting" style="margin-top:10px"><label for="sGest">인식 민감도 <span id="vGest" class="mono"></span></label><input id="sGest" type="range" min="1.0" max="2.6" step="0.1"><small>높을수록 쉽게 인식(오인식 증가). 기본 1.6</small></div>
+      <input id="lImportFile" type="file" accept="application/json,.json" hidden>
+    </div>
     <div id="pane-help" class="pane help" hidden>
       <p><b>지금 동작하는 것</b></p>
       <ul>
         <li>사람·자세 인식 AI(YOLO11 pose)가 <b>이 브라우저 안에서</b> 15개 화면을 분석</li>
         <li>쓰러짐 → 즉시 신고 창 → 무반응 시 긴급 격상 → 자동 신고(시연 모드)</li>
+      </ul>
+      <p><b>웹캠 · 동작 학습</b></p>
+      <ul>
+        <li>16번 칸 <b>📷 웹캠 연결</b> (GitHub Pages 주소나 localhost에서 열 때 동작, claude.ai 링크 페이지는 카메라 차단)</li>
+        <li><b>동작 학습</b> 탭: 이름·위험도·호출을 정하고 같은 동작을 3~5번 기록 → 저장 → 이후 같은 동작을 인식</li>
+        <li>저장한 동작과 분석 기록은 이 브라우저에 남고, 파일로 내보내 친구와 공유 가능</li>
       </ul>
       <p><b>아직 데모에 없는 것</b></p>
       <ul>
@@ -271,7 +330,7 @@ kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px sol
 
 <div id="emg" class="emg" hidden>
   <div class="emg-box" role="alertdialog" aria-labelledby="emgTitle">
-    <div class="emg-target">119</div>
+    <div class="emg-target" id="emgTarget">119</div>
     <h2 id="emgTitle">쓰러짐 감지 — 119 신고 대기</h2>
     <p id="emgMsg" class="emg-msg"></p>
     <p id="emgCam" class="emg-cam"></p>
@@ -318,6 +377,7 @@ const SITES = {
   "요양병원": { color: "var(--site-care)", icon: "🏥" },
   "공공장소": { color: "var(--site-pub)", icon: "🏙" },
   "내 영상": { color: "var(--accent)", icon: "📁" },
+  "웹캠": { color: "#F472B6", icon: "📷" },
 };
 const CAMERAS = [
   ["요양병원", "2병동 복도", "care2.gif"],
@@ -591,7 +651,7 @@ class Tracker {
   constructor() { this.tracks = []; this.next = 1; }
   reset() { this.tracks = []; }
   update(dets, t) {
-    this.tracks = this.tracks.filter((tr) => t - tr.t <= 1.0);
+    this.tracks = this.tracks.filter((tr) => t - tr.t <= 2.5); // 분석이 느린 PC에서도 같은 사람 번호 유지
     const pairs = [];
     dets.forEach((d, i) => this.tracks.forEach((tr, j) => { const v = iou(d.box, tr.box); if (v >= 0.25) pairs.push([v, i, j]); }));
     pairs.sort((a, b) => b[0] - a[0]);
@@ -721,6 +781,7 @@ function decode(buf, n, meta) {
   for (const d of dets) if (keep.every((k) => iou(k.box, d.box) < 0.7)) keep.push(d);
   for (const d of keep) {
     d.box = [Math.max(0, d.box[0]), Math.max(0, d.box[1]), Math.min(meta.vw, d.box[2]), Math.min(meta.vh, d.box[3])];
+    d.kpAll = d.kp; // 동작 학습용: 관절 17개 전부 (신뢰도는 d.kc)
     if (![5, 6, 11, 12].every((k) => d.kc[k] >= 0.5)) d.kp = null;
   }
   return keep;
@@ -734,6 +795,8 @@ function engineHot(camId) {
 function priority(cam, t) {
   let p = t - cam.lastRun;
   if (cam.alert && cam.alert.until > Date.now()) p += 5;
+  if (cam.site === "웹캠") p += 3;           // 웹캠은 늘 촘촘히 (동작 인식)
+  if (learn.rec && learn.rec.cam === cam.id) p += 10;
   if (engineHot(cam.id)) p += 4;          // 쓰러짐 의심·막 사라진 사람이 있으면 촘촘히
   else if (cam.persons.length) p += 0.6;  // 사람이 있는 화면을 빈 화면보다 먼저
   if (prefs.visible && !cam.visible) p -= 2.5;
@@ -764,6 +827,7 @@ function runOn(slot, cam) {
       const persons = cam.tracker.update(decode(m.data, m.n, meta), t);
       cam.persons = persons;
       for (const ev of engine.update(cam.id, persons, t, [meta.vw, meta.vh])) addEvent(ev);
+      gestureUpdate(cam, persons, t);
     } else if (m.type === "error") console.warn("분석 오류", m.message);
     setTimeout(schedule, 0);
   };
@@ -809,6 +873,7 @@ function tickGifs(ts) {
   for (const cam of state.cams) {
     const p = cam.src && cam.src.kind === "gif" ? cam.src.player : null;
     if (!p || ts < p.nextAt) continue;
+    if (!cam.visible && cam.aiOff && state.viewer !== cam.id) { p.nextAt = ts + 200; continue; } // 안 보이고 AI도 꺼진 화면은 쉼
     const r = p.step();
     if (r.wrapped) resetCam(cam);
     p.nextAt = Math.max(p.nextAt + r.delay, ts); // 밀려도 몰아서 재생하지 않음
@@ -863,7 +928,8 @@ function filteredIds() {
   return ids;
 }
 const camById = (id) => state.cams.find((c) => c.id === id);
-const pageCount = () => Math.max(1, Math.ceil((filteredIds().length + 1) / pageSize())); // +1: 추가 칸
+const pageCount = () => Math.max(1, Math.ceil(filteredIds().length / pageSize())); // 남는 칸이 있을 때만 '추가' 칸 표시
+function pageOf(id) { const i = filteredIds().indexOf(id); return i < 0 ? 0 : Math.floor(i / pageSize()); }
 let lastGridKey = "";
 function renderGrid() {
   const g = $("grid"), ids = filteredIds();
@@ -877,9 +943,13 @@ function renderGrid() {
     const id = ids[start + i];
     if (!id) {
       if (start + i === ids.length) {
-        const t = el("div", "tile add"); t.title = "GIF·영상 파일을 추가";
-        t.append(el("div", null)); t.firstChild.append(el("b", null, "＋"), document.createTextNode("카메라 추가 (GIF·영상)"));
-        t.addEventListener("click", () => $("fileInput").click()); g.appendChild(t);
+        const t = el("div", "tile add"), o = el("div", "opts");
+        const bc = el("button", "cam", "📷 웹캠 연결"), bf = el("button", null, "＋ GIF·영상 파일 추가");
+        bc.addEventListener("click", (e) => { e.stopPropagation(); connectWebcam(); });
+        bf.addEventListener("click", (e) => { e.stopPropagation(); $("fileInput").click(); });
+        o.append(bc, bf);
+        if (state.cams.some((c) => c.site === "웹캠")) bc.remove();
+        t.appendChild(o); g.appendChild(t);
       } else g.appendChild(el("div", "tile blank"));
       continue;
     }
@@ -1030,6 +1100,7 @@ function moveViewer(d) {
 /* =============================================================== 이벤트 */
 function addEvent(ev) {
   state.events.unshift(ev); state.events = state.events.slice(0, 150);
+  logSave(ev);
   const cam = camById(ev.cam);
   if (cam) cam.alert = { level: ev.severity, message: ev.message, until: Date.now() + (ev.severity === "critical" ? 60000 : 25000) };
   renderEvents(); refreshTiles();
@@ -1052,6 +1123,264 @@ function renderEvents() {
   }
 }
 
+/* ============================================================== 웹캠 */
+async function connectWebcam() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("이 브라우저에서는 카메라를 쓸 수 없음 (Chrome·Edge 최신 버전 권장)", "critical", 7000); return; }
+  if (!window.isSecureContext) { toast("카메라는 https 주소나 localhost에서만 쓸 수 있음", "critical", 7000); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  } catch (e) {
+    const msg = e && e.name === "NotAllowedError"
+      ? "카메라 권한이 거부됨 — 주소창 왼쪽 자물쇠 → 카메라 '허용' 후 다시 누르세요. (claude.ai 링크 페이지에서는 카메라가 막혀 있어 GitHub Pages 주소에서 열어야 함)"
+      : e && e.name === "NotFoundError" ? "연결된 웹캠을 찾지 못함" : "카메라를 열 수 없음: " + (e && e.message);
+    toast(msg, "critical", 9000); return;
+  }
+  const cam = addCamera("웹캠", "내 웹캠", async (cam) => {
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.autoplay = true; v.srcObject = stream;
+    await v.play().catch(() => {});
+    await new Promise((res) => (v.readyState >= 2 ? res() : v.addEventListener("loadeddata", res, { once: true })));
+    cam.src = videoSource(v);
+    renderGrid();
+  });
+  state.site = "전체"; renderSiteFilter(); state.page = pageOf(cam.id); renderGrid(); fillLearnCams();
+  $("lCam").value = cam.id;
+  toast("웹캠 연결 — AI 분석 시작. '동작 학습' 탭에서 동작을 기록할 수 있음", "ok", 6000);
+}
+
+/* ============================================================ 동작 학습
+   딥러닝 재학습이 아니라, 관절 17개의 움직임을 시간 순서대로 저장해 두고 새 움직임과 거리를 비교하는 방식 */
+const learn = { actions: store.get("jkb.actions", []), hist: new Map(), hits: new Map(), cool: new Map(), samples: [], rec: null, score: {}, sens: store.get("jkb.gestSens", 1.6) };
+const FEAT_N = 16;
+function poseVec(p) {
+  if (!p.kpAll) return null;
+  const b = p.box, h = Math.max(b[3] - b[1], 1), cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+  const v = new Float32Array(34), m = new Uint8Array(17); let n = 0;
+  for (let k = 0; k < 17; k++) { if (p.kc[k] < 0.4) continue; v[k * 2] = (p.kpAll[k][0] - cx) / h; v[k * 2 + 1] = (p.kpAll[k][1] - cy) / h; m[k] = 1; n++; }
+  return n >= 7 ? { v, m } : null;
+}
+function histPush(camId, persons, t) {
+  for (const p of persons) {
+    const key = camId + "|" + p.id, f = poseVec(p);
+    if (!f) continue;
+    let arr = learn.hist.get(key); if (!arr) learn.hist.set(key, (arr = []));
+    arr.push({ t, ...f, area: (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]) });
+    while (arr.length && t - arr[0].t > 5) arr.shift();
+  }
+  for (const [k, arr] of learn.hist) if (!arr.length || t - arr[arr.length - 1].t > 3) learn.hist.delete(k);
+}
+// 최근 dur초를 FEAT_N개 시점으로 나눠 관절 위치를 뽑음 (분석 속도가 달라도 같은 길이로 비교)
+function windowFeat(arr, dur, tEnd) {
+  if (!arr || arr.length < 3) return null;
+  const t0 = tEnd - dur;
+  if (arr[0].t > t0 + dur * 0.3) return null;
+  const frames = [];
+  for (let i = 0; i < FEAT_N; i++) {
+    const ti = t0 + (dur * i) / (FEAT_N - 1);
+    let best = arr[0]; for (const a of arr) if (Math.abs(a.t - ti) < Math.abs(best.t - ti)) best = a;
+    if (Math.abs(best.t - ti) > Math.max(0.6, dur / 3)) return null;
+    frames.push({ v: Array.from(best.v), m: Array.from(best.m) });
+  }
+  return frames;
+}
+function featDist(a, b) {
+  let s = 0, n = 0;
+  for (let i = 0; i < FEAT_N; i++) {
+    const A = a[i], B = b[i];
+    for (let k = 0; k < 17; k++) {
+      if (!A.m[k] || !B.m[k]) continue;
+      const dx = A.v[k * 2] - B.v[k * 2], dy = A.v[k * 2 + 1] - B.v[k * 2 + 1];
+      s += Math.sqrt(dx * dx + dy * dy); n++;
+    }
+  }
+  return n < FEAT_N * 5 ? Infinity : s / n;
+}
+// 움직임 크기: 관절 위치가 시간에 따라 얼마나 변하는지 (가만히 있는 사람 ≈ 0)
+function featMotion(f) {
+  let s = 0, n = 0;
+  for (let k = 0; k < 17; k++) {
+    let mx = 0, my = 0, c = 0;
+    for (const fr of f) if (fr.m[k]) { mx += fr.v[k * 2]; my += fr.v[k * 2 + 1]; c++; }
+    if (c < FEAT_N / 2) continue;
+    mx /= c; my /= c;
+    for (const fr of f) if (fr.m[k]) { s += Math.hypot(fr.v[k * 2] - mx, fr.v[k * 2 + 1] - my); n++; }
+  }
+  return n ? s / n : 0;
+}
+function camMatches(act, cam) {
+  if (act.scope === "all") return true;
+  return act.recCam === "webcam" ? cam.site === "웹캠" : act.recCam === cam.id;
+}
+function actionThreshold(act) {
+  // 저장한 샘플끼리의 평균 거리 × 민감도 (샘플이 서로 비슷할수록 엄격해짐)
+  return Math.min(0.12, Math.max(0.035, act.spread) * learn.sens); // 상한: 샘플이 들쭉날쭉해도 아무 자세나 맞다고 하지 않게
+}
+function gestureUpdate(cam, persons, t) {
+  histPush(cam.id, persons, t);
+  const sc = {};
+  for (const act of learn.actions) {
+    if (act.off || !camMatches(act, cam)) continue;
+    let best = Infinity, bestKey = null;
+    for (const [key, arr] of learn.hist) {
+      if (!key.startsWith(cam.id + "|")) continue;
+      const f = windowFeat(arr, act.dur, t); if (!f) continue;
+      const mo = featMotion(f), am = act.motion || 0;
+      if (am > 0.02 ? (mo < am * 0.45 || mo > am * 2.5) : mo > 0.05) continue; // 움직임 크기가 다르면 다른 동작
+      for (const smp of act.samples) { const d = featDist(f, smp); if (d < best) { best = d; bestKey = key; } }
+    }
+    const th = actionThreshold(act);
+    sc[act.id] = { d: best, th };
+    const hk = cam.id + "|" + act.id;
+    if (best < th) {
+      const h = (learn.hits.get(hk) || 0) + 1; learn.hits.set(hk, h);
+      const last = learn.cool.get(hk) || 0;
+      if (h >= 2 && t - last > Math.max(4, act.dur * 2)) {
+        learn.cool.set(hk, t); learn.hits.set(hk, 0);
+        addEvent({ cam: cam.id, type: "gesture", severity: act.sev === "info" ? "danger" : act.sev, message: `학습 동작 인식: ${act.name}`, time: Date.now(),
+          emergency: act.call || null, note: act.call ? `${act.call} 호출 대상` : "학습한 동작과 일치" });
+      }
+    } else learn.hits.set(hk, 0);
+  }
+  learn.score[cam.id] = sc;
+}
+function biggestTrack(camId) {
+  let best = null, area = 0;
+  for (const [key, arr] of learn.hist) if (key.startsWith(camId + "|") && arr.length) { const a = arr[arr.length - 1].area; if (a > area) { area = a; best = arr; } }
+  return best;
+}
+function fillLearnCams() {
+  const sel = $("lCam"), cur = sel.value; sel.replaceChildren();
+  for (const id of state.order) { const c = camById(id), o = el("option", null, `CAM ${c.no} · ${c.name}`); o.value = c.id; sel.appendChild(o); }
+  const web = state.cams.find((c) => c.site === "웹캠");
+  sel.value = cur && camById(cur) ? cur : web ? web.id : state.order[0];
+}
+function renderSamples() {
+  const box = $("lSamples"); box.replaceChildren();
+  for (let i = 0; i < 5; i++) box.appendChild(el("span", i < learn.samples.length ? "ok" : "", String(i + 1)));
+  $("lSave").disabled = learn.samples.length < 3;
+  $("lSave").textContent = learn.samples.length < 3 ? `저장 (샘플 ${learn.samples.length}/3 이상)` : `저장 (샘플 ${learn.samples.length}개)`;
+}
+function startRecord() {
+  if (learn.rec) return;
+  if (!state.aiReady) { toast("AI 준비가 끝난 뒤 기록할 수 있음", "danger"); return; }
+  const camId = $("lCam").value, dur = +$("lDur").value, cam = camById(camId);
+  if (!cam || cam.aiOff) { toast("AI가 켜진 카메라를 고르세요", "danger"); return; }
+  learn.rec = { cam: camId, dur };
+  let n = 3; const cd = $("lCd"); cd.className = "cd"; cd.textContent = n;
+  const tick = setInterval(() => {
+    n--;
+    if (n > 0) { cd.textContent = n; return; }
+    clearInterval(tick);
+    cd.className = "cd go"; cd.textContent = "동작!";
+    setTimeout(() => {
+      const f = windowFeat(biggestTrack(camId), dur, now());
+      learn.rec = null;
+      if (!f) { cd.className = "cd"; cd.textContent = "실패"; toast("사람이 잘 안 보였음 — 전신이 보이게 서서 다시 기록", "danger", 5000); return; }
+      learn.samples.push(f); cd.className = "cd"; cd.textContent = `샘플 ${learn.samples.length} 완료`;
+      renderSamples();
+    }, dur * 1000 + 250);
+  }, 1000);
+}
+function saveAction() {
+  const name = $("lName").value.trim();
+  if (!name) { toast("동작 이름을 입력하세요", "danger"); $("lName").focus(); return; }
+  if (learn.samples.length < 3) return;
+  const S = learn.samples; let s = 0, n = 0;
+  for (let i = 0; i < S.length; i++) for (let j = i + 1; j < S.length; j++) { const d = featDist(S[i], S[j]); if (isFinite(d)) { s += d; n++; } }
+  const recCamObj = camById($("lCam").value);
+  const act = { id: "a" + Date.now(), name, sev: $("lSev").value, call: $("lCall").value, dur: +$("lDur").value, samples: S.slice(), spread: n ? s / n : 0.06,
+    motion: S.reduce((a, x) => a + featMotion(x), 0) / S.length, scope: $("lScope").value,
+    recCam: recCamObj && recCamObj.site === "웹캠" ? "webcam" : $("lCam").value, created: new Date().toISOString() };
+  learn.actions.push(act); learn.samples = []; persistActions(); renderSamples(); renderActions();
+  $("lName").value = ""; $("lCd").textContent = "저장됨";
+  toast(`'${name}' 동작 저장 — 이제 화면에서 이 동작을 알아봄`, "ok", 5000);
+}
+function persistActions() {
+  try { localStorage.setItem("jkb.actions", JSON.stringify(learn.actions)); }
+  catch { toast("브라우저 저장 공간이 부족해 저장하지 못함 — '내보내기'로 파일로 보관하세요", "critical", 7000); }
+}
+function renderActions() {
+  const list = $("lList"); list.replaceChildren();
+  if (!learn.actions.length) { list.appendChild(el("div", "empty", "아직 저장된 동작 없음")); return; }
+  for (const act of learn.actions) {
+    const box = el("div", "act"), h = el("div", "h");
+    const where = act.scope === "all" ? "모든 카메라" : act.recCam === "webcam" ? "웹캠" : (camById(act.recCam) ? "CAM " + camById(act.recCam).no : "기록 카메라");
+    h.append(el("b", null, act.name), el("span", "meta", `${{ info: "알림", danger: "위험", critical: "긴급" }[act.sev]}${act.call ? " · " + act.call : ""} · ${act.dur}초 · ${where}`));
+    const meter = el("div", "meter"); meter.appendChild(el("i")); meter.dataset.act = act.id;
+    const btns = el("div", "btns"), bOff = el("button", null, act.off ? "켜기" : "끄기"), bDel = el("button", null, "삭제");
+    bOff.addEventListener("click", () => { act.off = !act.off; persistActions(); renderActions(); });
+    bDel.addEventListener("click", () => { learn.actions = learn.actions.filter((a) => a !== act); persistActions(); renderActions(); toast(`'${act.name}' 삭제`, "ok", 2000); });
+    btns.append(bOff, bDel);
+    box.append(h, meter, el("div", "meta", "선택한 카메라 기준 일치도"), btns);
+    list.appendChild(box);
+  }
+}
+function refreshMeters() {
+  const sc = learn.score[$("lCam").value] || {};
+  document.querySelectorAll("#lList .meter").forEach((m) => {
+    const s = sc[m.dataset.act]; const i = m.firstChild;
+    if (!s || !isFinite(s.d)) { i.style.width = "0"; m.classList.remove("hit"); return; }
+    const r = Math.max(0, Math.min(1, 1 - (s.d - s.th) / (s.th * 1.5)));
+    i.style.width = Math.round(r * 100) + "%"; m.classList.toggle("hit", s.d < s.th);
+  });
+}
+function exportActions() {
+  const blob = new Blob([JSON.stringify({ app: "jikyeobom", version: 1, actions: learn.actions }, null, 0)], { type: "application/json" });
+  downloadBlob(blob, `jikyeobom-actions-${new Date().toISOString().slice(0, 10)}.json`);
+}
+function importActions(file) {
+  file.text().then((txt) => {
+    const data = JSON.parse(txt), list = Array.isArray(data) ? data : data.actions;
+    if (!Array.isArray(list)) throw new Error("형식이 맞지 않음");
+    let n = 0;
+    for (const a of list) {
+      if (!a || !a.name || !Array.isArray(a.samples) || !a.samples.length) continue;
+      if (learn.actions.some((x) => x.id === a.id)) continue;
+      learn.actions.push({ id: a.id || "a" + Date.now() + n, name: String(a.name).slice(0, 20), sev: ["info", "danger", "critical"].includes(a.sev) ? a.sev : "danger",
+        call: ["", "112", "119"].includes(a.call) ? a.call : "", dur: [1, 2, 3].includes(a.dur) ? a.dur : 2, samples: a.samples, spread: +a.spread || 0.06,
+        motion: +a.motion || 0, scope: a.scope === "all" ? "all" : "rec", recCam: a.recCam === "webcam" ? "webcam" : String(a.recCam || "webcam"), created: a.created || "" });
+      n++;
+    }
+    persistActions(); renderActions(); toast(`동작 ${n}개 가져옴`, "ok");
+  }).catch((e) => toast("가져오기 실패: " + e.message, "critical"));
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ======================================================== 분석 기록 저장
+   감지된 이벤트를 브라우저에 쌓아 두고 CSV로 내려받음 */
+function logSave(ev) {
+  const cam = camById(ev.cam);
+  const row = { time: new Date(ev.time).toISOString(), cam: cam ? "CAM " + cam.no : ev.cam, name: cam ? cam.name : "", site: cam ? cam.site : "", severity: ev.severity, message: ev.message, call: ev.emergency || "" };
+  const log = store.get("jkb.log", []); log.push(row); store.set("jkb.log", log.slice(-2000));
+}
+function exportLog() {
+  const log = store.get("jkb.log", []);
+  if (!log.length) { toast("저장된 기록이 아직 없음", "danger"); return; }
+  const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+  const head = ["시각", "카메라", "카메라 이름", "현장", "위험도", "내용", "호출"];
+  const csv = "\ufeff" + [head.map(esc).join(","), ...log.map((r) => [r.time, r.cam, r.name, r.site, r.severity, r.message, r.call].map(esc).join(","))].join("\r\n");
+  downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `jikyeobom-log-${new Date().toISOString().slice(0, 10)}.csv`);
+  toast(`기록 ${log.length}건을 CSV로 저장`, "ok");
+}
+function bindLearn() {
+  fillLearnCams(); renderSamples(); renderActions();
+  $("lRec").addEventListener("click", startRecord);
+  $("lUndo").addEventListener("click", () => { learn.samples.pop(); renderSamples(); $("lCd").textContent = "준비"; });
+  $("lSave").addEventListener("click", saveAction);
+  $("lExport").addEventListener("click", exportActions);
+  $("lImport").addEventListener("click", () => $("lImportFile").click());
+  $("lImportFile").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) importActions(f); e.target.value = ""; });
+  $("exportLog").addEventListener("click", exportLog);
+  const s = $("sGest"), v = $("vGest"); s.value = learn.sens; v.textContent = learn.sens.toFixed(1);
+  s.addEventListener("input", () => { learn.sens = +s.value; v.textContent = learn.sens.toFixed(1); store.set("jkb.gestSens", learn.sens); });
+  setInterval(refreshMeters, 300);
+}
+
 /* ============================================================ 긴급 신고 */
 function openIncident(ev) {
   const open = state.incidents.find((x) => x.status === "pending" && x.ev.cam === ev.cam);
@@ -1066,8 +1395,10 @@ function renderIncident() {
   const inc = pending[0], cam = camById(inc.ev.cam);
   $("emg").hidden = false;
   if (shownId !== inc.id) { shownId = inc.id; $("emgFeed").replaceChildren(cam && cam.src ? makeView(cam) : el("div")); }
-  const critical = inc.ev.severity === "critical";
-  $("emgTitle").textContent = critical ? "긴급 상황 — 119 구급" : "쓰러짐 감지 — 119 신고 대기";
+  const critical = inc.ev.severity === "critical", target = inc.ev.emergency || "119";
+  $("emgTarget").textContent = target;
+  $("emgTitle").textContent = inc.ev.type === "gesture" ? `학습 동작 감지 — ${target} 신고 대기`
+    : critical ? "긴급 상황 — 119 구급" : "쓰러짐 감지 — 119 신고 대기";
   $("emgMsg").textContent = inc.ev.message;
   $("emgCam").textContent = `CAM ${cam ? cam.no : ""} ${cam ? cam.name : ""} (${cam ? cam.site : ""}) · ${hhmmss(inc.ev.time)}`;
   $("emgQueue").textContent = pending.length > 1 ? `· 대기 중 ${pending.length - 1}건 더` : "";
@@ -1085,11 +1416,14 @@ function resolve(inc, status, by) {
   inc.status = status;
   const cam = camById(inc.ev.cam), name = cam ? `CAM ${cam.no} ${cam.name}` : "";
   if (status === "dispatched") {
-    toast(`☎ 119 신고 발송 (${by}, 시연) · ${name}`, "critical");
-    state.events.unshift({ cam: inc.ev.cam, severity: "critical", log: true, message: `119 신고 발송 — ${by} (시연, 실제 발송 안 됨)`, time: Date.now(), note: "현장·카메라 위치·발생 시각 포함" });
+    const target = inc.ev.emergency || "119";
+    toast(`☎ ${target} 신고 발송 (${by}, 시연) · ${name}`, "critical");
+    const done = { cam: inc.ev.cam, severity: "critical", log: true, message: `${target} 신고 발송 — ${by} (시연, 실제 발송 안 됨)`, time: Date.now(), note: "현장·카메라 위치·발생 시각 포함" };
+    state.events.unshift(done); logSave(done);
   } else {
     toast(`신고 취소 (오탐 처리) · ${name}`, "ok");
-    state.events.unshift({ cam: inc.ev.cam, severity: "ok", log: true, message: "관리자가 오탐으로 신고 취소", time: Date.now() });
+    const done = { cam: inc.ev.cam, severity: "ok", log: true, message: "관리자가 오탐으로 신고 취소", time: Date.now() };
+    state.events.unshift(done); logSave(done);
     if (cam) cam.alert = null;
   }
   renderEvents(); renderIncident(); refreshTiles();
@@ -1119,12 +1453,15 @@ function setAi(on) {
   refreshAiBadge(); refreshTiles(); if (on) schedule();
 }
 function addFiles(files) {
+  let firstNew = null;
   for (const f of files) {
     const url = URL.createObjectURL(f);
-    if (f.type === "image/gif" || /\.gif$/i.test(f.name)) addCamera("내 영상", f.name, async (cam) => loadGifBuffer(cam, await f.arrayBuffer()));
-    else addCamera("내 영상", f.name, (cam) => loadVideo(cam, url));
+    const cam = (f.type === "image/gif" || /\.gif$/i.test(f.name))
+      ? addCamera("내 영상", f.name, async (cam) => loadGifBuffer(cam, await f.arrayBuffer()))
+      : addCamera("내 영상", f.name, (cam) => loadVideo(cam, url));
+    firstNew = firstNew || cam;
   }
-  state.site = "전체"; renderSiteFilter(); state.page = pageCount() - 1; renderGrid();
+  state.site = "전체"; renderSiteFilter(); state.page = pageOf(firstNew.id); renderGrid(); fillLearnCams();
   toast(`영상 ${files.length}개 추가 — AI가 바로 분석 시작`, "ok");
 }
 function bindUI() {
@@ -1147,7 +1484,7 @@ function bindUI() {
   $("helpClose").addEventListener("click", () => ($("helpModal").hidden = true));
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
-    ["events", "settings", "help"].forEach((n) => { $("pane-" + n).hidden = n !== b.dataset.tab; });
+    ["events", "settings", "learn", "help"].forEach((n) => { $("pane-" + n).hidden = n !== b.dataset.tab; });
   }));
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input,select,textarea")) return;
@@ -1170,12 +1507,14 @@ function init() {
   bindUI(); bindSettings();
   const l = store.get("jkb.layout", { cols: 4, rows: 4 }); state.cols = l.cols; state.rows = l.rows;
   for (const [site, name, file] of CAMERAS) addCamera(site, name, (cam) => loadGif(cam, "gif/" + file));
-  renderSiteFilter(); renderGrid(); renderEvents();
+  renderSiteFilter(); renderGrid(); renderEvents(); bindLearn();
   setInterval(refreshTiles, 500); setInterval(tickIncident, 250);
   requestAnimationFrame(loop);
   startAI();
-  window.__jkb = { state, engine, ai }; // 점검용
+  window.__jkb = { state, engine, ai, learn }; // 점검용
 }
 init();
 })();
 </script>
+</body>
+</html>

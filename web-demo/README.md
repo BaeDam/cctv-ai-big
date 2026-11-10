@@ -1,5 +1,23 @@
 # 브라우저 AI 관제 데모 (서버 없이 동작)
 
+## 크롬에서 바로 열기 (웹캠 사용 가능)
+- **사이트 주소:** https://baedam.github.io/cctv-ai-big/
+  - 처음 한 번: 저장소 **Settings → Pages → Build and deployment → Source: GitHub Actions** 선택
+  - 이후 `web-demo/` 를 고쳐서 올리면 사이트가 자동으로 갱신됨
+- **내 PC에서 열기:** 이 폴더를 내려받아
+  - 윈도우: `start-windows.bat` 더블클릭 (Python 필요) → 크롬에서 http://localhost:8000
+  - 맥: 터미널에서 `sh start-mac.sh`
+- 웹캠: 16번 칸 **📷 웹캠 연결** → 주소창에 뜨는 카메라 권한 **허용**
+
+## 동작 학습
+1. 오른쪽 **동작 학습** 탭에서 카메라(웹캠) 선택, 동작 이름·위험도·호출(없음/112/119)·길이 입력
+2. **● 샘플 기록** → 3초 카운트다운 뒤 동작. 같은 동작을 3~5번 반복
+3. **저장** → 이후 같은 동작이 나오면 "학습 동작 인식" 이벤트와 알림·신고 흐름
+- 관절 17개의 움직임을 저장해 비교하는 방식(딥러닝 재학습 아님). 손 흔들기·팔 들기처럼 뚜렷한 동작이 잘 맞음
+- 기본은 **기록한 카메라에서만** 인식 (다른 화면 오인식 방지). 움직임 크기도 비교
+- 저장한 동작은 브라우저에 남고, **내보내기/가져오기**로 친구와 JSON 파일 공유
+- 감지 기록은 이벤트 탭의 **기록 CSV** 로 내려받기
+
 AI 모델(YOLO11n-pose)을 브라우저 안에서 직접 돌리는 16분할 관제 화면입니다.
 판단 규칙은 `backend/app/situation.py` 와 같습니다.
 
@@ -15,8 +33,8 @@ AI 모델(YOLO11n-pose)을 브라우저 안에서 직접 돌리는 16분할 관�
 ## 현재 한계
 - 싸움·폭행, 안전모 미착용, 화재 판단은 아직 없음 (사람 인식과 쓰러짐만)
 
-## 같이 있어야 하는 파일 (용량 때문에 저장소에 넣지 않음)
-| 파일 | 만드는 방법 |
+## AI 모델 파일 (저장소에 포함, 사이트에서 바로 사용)
+| 파일 | 만든 방법 |
 |---|---|
 | `model-pose640.gz.wasm` | `yolo export model=yolo11n-pose.pt format=onnx imgsz=640 opset=17 simplify=True` 후 `gzip -9` (이름만 .wasm) |
 | `runtime-jsep.gz.wasm` | npm `onnxruntime-web@1.20.1` 의 `dist/ort-wasm-simd-threaded.jsep.wasm` 을 `gzip -9` |
