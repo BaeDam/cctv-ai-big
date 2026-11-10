@@ -48,6 +48,11 @@ AI 모델(YOLO11n-pose)을 브라우저 안에서 직접 돌리는 16분할 관�
 | `model-pose640.gz.wasm` | `yolo export model=yolo11n-pose.pt format=onnx imgsz=640 opset=17 simplify=True` 후 `gzip -9` (이름만 .wasm) |
 | `model-ppe640.gz.wasm` | 공개 안전모 감지 모델(github.com/snehilsanyal/Construction-Site-Safety-PPE-Detection, Roboflow Construction Site Safety 데이터 CC BY 4.0로 학습된 YOLOv8)을 ONNX로 변환 후 `gzip -9` |
 | `runtime-jsep.gz.wasm` | npm `onnxruntime-web@1.20.1` 의 `dist/ort-wasm-simd-threaded.jsep.wasm` 을 `gzip -9` |
+| `ort.webgpu.min.js`, `ort-jsep.js` | npm `onnxruntime-web@1.20.1` 의 `dist/ort.webgpu.min.js`, `dist/ort-wasm-simd-threaded.jsep.mjs` 그대로 (MIT, CDN 대신 직접 제공) |
+
+## 보안
+- 외부 CDN·API 를 쓰지 않고, CSP(보안 정책)로 사이트 밖 연결을 막습니다. 웹캠 영상·기록·학습 동작은 내 브라우저에만 남습니다.
+- 로컬 실행 스크립트는 이 PC(`127.0.0.1`)에서만 열립니다.
 
 ## 영상 출처
 - 공공장소(`pub_*.gif`): Surveillance Camera Fight Dataset — Ş. Aktı et al., "Vision-based Fight Detection from Surveillance Cameras", IPTA 2019 (MIT License), github.com/seymanurakti/fight-detection-surv-dataset

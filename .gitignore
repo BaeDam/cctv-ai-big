@@ -10,3 +10,9 @@ demo-output/
 .env
 *.env
 !.env.example
+
+# 개인 도구 설정
+.claude/
+.DS_Store
+.idea/
+.vscode/
