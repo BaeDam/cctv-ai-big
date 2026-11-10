@@ -5,8 +5,7 @@ AI가 CCTV 화면을 대신 보고, 사람이 쓰러지거나 싸움이 나면 �
 
 **팀 빅 ai tv** · 배찬익, 김태일, 윤성빈 · 동명대학교 인공지능학과
 
-### ▶ 바로 써 보기: https://baedam.github.io/cctv-ai-big/
-설치·회원가입·서버 없이 크롬에서 바로 열립니다. AI는 **내 컴퓨터 브라우저 안에서만** 돌고, 영상은 밖으로 나가지 않습니다.
+설치·서버 없이 크롬에서 열리고, AI는 **내 컴퓨터 브라우저 안에서만** 돌아 영상이 밖으로 나가지 않습니다.
 
 ---
 
@@ -33,13 +32,13 @@ AI가 CCTV 화면을 대신 보고, 사람이 쓰러지거나 싸움이 나면 �
 ## 구성
 | 폴더 | 내용 |
 |---|---|
-| [`web-demo/`](web-demo/) | **주력.** 서버 없이 브라우저에서 AI가 도는 관제 화면 (위 사이트). 설명: [`web-demo/README.md`](web-demo/README.md) |
+| [`web-demo/`](web-demo/) | **주력.** 서버 없이 브라우저에서 AI가 도는 관제 화면. 설명: [`web-demo/README.md`](web-demo/README.md) |
 | `backend/` | 서버 버전 (Python FastAPI + YOLO, 실제 IP 카메라 RTSP 연결용) |
 | `frontend/` | 서버 버전용 관제 화면 |
 | `docs/` | [구상서](docs/PLAN.md) · [맥 설치](docs/MAC_SETUP.md) · [AI 테스트 결과](docs/AI_TEST.md) · [인수인계](docs/HANDOFF.md) |
 
 ## 내 PC에서 실행
-**사이트 버전 (추천)** — 위 주소로 열면 끝. 오프라인으로 쓰려면 저장소를 내려받아:
+**브라우저 버전 (추천)** — 저장소를 내려받아:
 - 윈도우: `web-demo/start-windows.bat` 더블클릭 (Python 필요)
 - 맥: `sh web-demo/start-mac.sh`
 - → 크롬에서 http://localhost:8000
@@ -64,7 +63,7 @@ python -m pytest
 
 ## 보안·비용
 - **0원으로 운영.** 유료 서비스·API 키·결제 수단 없음. 외부 AI(Gemini) 연동은 2026-11 제거했습니다.
-- **영상이 밖으로 나가지 않음.** AI 모델과 실행기까지 사이트가 직접 제공하고, 보안 정책(CSP)으로 외부 연결 자체를 막습니다.
+- **영상이 밖으로 나가지 않음.** AI 모델과 실행기를 외부 CDN 없이 직접 제공하고, 보안 정책(CSP)으로 외부 연결 자체를 막습니다.
 - **서버 버전은 이 PC에서만 접속**(`127.0.0.1`). 로그인 기능이 없으므로 와이파이 전체에 열지 마세요.
 - YOLO(Ultralytics) 사용 통계 전송을 꺼 둡니다.
 - 비밀키 유출 방지: 처음 한 번 `git config core.hooksPath .githooks` → 키나 `.env` 가 든 커밋을 자동 차단
