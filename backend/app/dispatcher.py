@@ -44,7 +44,6 @@ class Incident:
     status: IncidentStatus = IncidentStatus.PENDING
     resolved_by: str | None = None  # "auto" / "operator"
     log: list[str] = field(default_factory=list)
-    ai: dict | None = None  # AI 에이전트(Gemini) 판단 결과. {"pending": True} 면 판단 중
 
     def to_dict(self) -> dict:
         return {
@@ -56,7 +55,6 @@ class Incident:
             "status": self.status.value,
             "resolved_by": self.resolved_by,
             "log": self.log,
-            "ai": self.ai,
         }
 
 
@@ -158,15 +156,6 @@ class EmergencyDispatcher:
         self._notify(inc)
         return inc
 
-    def attach_ai(self, incident_id: int, result: dict) -> None:
-        inc = self.incidents.get(incident_id)
-        if inc is None:
-            return
-        inc.ai = result
-        if "error" not in result and not result.get("pending"):
-            inc.log.append(f"AI 판단: {result.get('severity')} / {result.get('call')} — {result.get('reason')}")
-        self._notify(inc)
-
     def cancel(self, incident_id: int, by: str = "operator") -> Incident | None:
         inc = self.incidents.get(incident_id)
         if inc and inc.status == IncidentStatus.PENDING:
@@ -201,8 +190,6 @@ class EmergencyDispatcher:
             f"장소: {self.site_name} {self.site_address} / 카메라: {cam}\n"
             f"발생: {when}"
         )
-        if inc.ai and inc.ai.get("report"):
-            msg += f"\nAI 상황 판단: {inc.ai['report']}"
         return msg
 
     def _dispatch(self, inc: Incident, by: str) -> None:

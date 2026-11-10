@@ -427,31 +427,15 @@
       const cam = camById(inc.event.camera_id);
       $("emFeed").replaceChildren(cam ? createFeed(cam) : el("div"));
     }
-    // 내용은 매번 갱신 (쓰러짐 → 무반응 격상, AI 판단 도착)
+    // 내용은 매번 갱신 (쓰러짐 → 무반응 격상)
     const critical = inc.event.severity === "critical";
     $("emTarget").textContent = inc.target;
     $("emTitle").textContent = inc.target === "112" ? "긴급 상황 — 112 경찰"
       : critical ? "긴급 상황 — 119 구급/소방" : "쓰러짐 감지 — 119 신고 대기";
     $("emMessage").textContent = inc.event.message;
     $("emCamera").textContent = `${camName(inc.event.camera_id)} · ${fmtTime(inc.event.timestamp)}`;
-    renderAi(inc.ai);
     $("emQueue").textContent = pending.length > 1 ? `대기 중인 긴급 상황 ${pending.length - 1}건 더 있음` : "";
     tickEmergency();
-  }
-
-  function renderAi(ai) {
-    const box = $("emAi");
-    box.className = "em-ai";
-    if (!ai) { box.hidden = true; return; }
-    box.hidden = false;
-    if (ai.pending) { box.textContent = "AI(Gemini)가 장면을 확인하는 중…"; return; }
-    if (ai.error) { box.classList.add("muted"); box.textContent = `AI 판단 사용 불가: ${ai.error}`; return; }
-    box.classList.add(ai.is_emergency ? "alert" : "calm");
-    box.replaceChildren(
-      el("b", null, `AI 판단: ${ai.is_emergency ? "위급 상황으로 보임" : "위급하지 않을 수 있음"} · 심각도 ${ai.severity} · 권고 ${ai.call}`),
-      el("div", null, ai.observation),
-      el("div", "em-ai-reason", `근거: ${ai.reason}`),
-    );
   }
 
   function tickEmergency() {

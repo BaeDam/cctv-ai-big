@@ -26,19 +26,6 @@ python -c "import torch; print('맥 GPU 사용 가능:', torch.backends.mps.is_a
 ```
 `True` 가 나오면 됩니다.
 
-## 1-1. Gemini AI 에이전트 키 넣기 (선택)
-쓰러짐이 감지되면 장면 사진을 Gemini가 보고 실제 위험인지, 심각도, 신고 문장을 판단해 신고 창에 보여줍니다.
-
-```bash
-cd cctv-ai-big/backend
-cp .env.example .env
-open -e .env        # GEMINI_API_KEY= 뒤에 키를 붙여넣고 저장
-chmod 600 .env      # 본인만 읽을 수 있게
-```
-- `.env` 는 git 에 올라가지 않습니다. 키를 코드·설정 파일·채팅에 직접 쓰지 마세요.
-- 키가 없거나 크레딧이 없어도 감지와 신고 창은 그대로 동작합니다 (AI 판단 칸에 사유만 표시).
-- Gemini 가 '위급하지 않아 보임'이라고 해도 신고 창을 자동으로 닫지 않습니다. 취소는 사람이 합니다.
-
 ## 2. 맥북 내장 카메라로 테스트 (카메라 구매 전)
 `backend/config.yaml` 에서 첫 번째 카메라의 `source` 를 `"0"` 으로 바꿉니다.
 

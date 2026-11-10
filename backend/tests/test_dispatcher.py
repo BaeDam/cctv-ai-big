@@ -87,16 +87,6 @@ def test_fall_opens_incident_and_unresponsive_upgrades_it():
     assert inc.status == IncidentStatus.DISPATCHED and "무반응" in ch.sent[0]
 
 
-def test_ai_assessment_is_attached_and_added_to_report():
-    clock, ch = Clock(), RecordingChannel()
-    d = make(ch, clock)
-    inc = d.escalate(critical())
-    d.attach_ai(inc.id, {"severity": "높음", "call": "119", "reason": "바닥에 누워 움직임 없음", "report": "작업자 1명 쓰러져 의식 없음 추정"})
-    d.confirm(inc.id)
-    assert "AI 상황 판단: 작업자 1명 쓰러져 의식 없음 추정" in ch.sent[0]
-    assert inc.to_dict()["ai"]["call"] == "119"
-
-
 def test_all_channels_failed_marks_failed():
     clock = Clock()
     d = make(RecordingChannel(ok=False), clock)

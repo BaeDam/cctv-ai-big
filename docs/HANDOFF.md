@@ -13,7 +13,7 @@
 | 폴더 | 내용 |
 |---|---|
 | `web-demo/` | **지금 주력.** 서버 없이 브라우저에서 AI가 도는 16분할 관제 화면 (GIF 15개 + 웹캠) |
-| `backend/` | Python 서버 버전 (FastAPI, YOLO, 상황 판단, 신고, Gemini 연동). 테스트 `cd backend && python -m pytest` |
+| `backend/` | Python 서버 버전 (FastAPI, YOLO, 상황 판단, 신고). 테스트 `cd backend && python -m pytest` |
 | `frontend/` | 서버 버전용 관제 화면 |
 | `docs/` | 구상서, 맥 설치, AI 테스트 결과, 이 문서 |
 
@@ -38,13 +38,14 @@
 ## 내 PC 에서 실행
 - 사이트로: https://baedam.github.io/cctv-ai-big/ (웹캠은 주소창 권한 허용)
 - 로컬로: `web-demo/start-windows.bat` (윈도우, Python 필요) 또는 `sh web-demo/start-mac.sh` → http://localhost:8000
-- 서버 버전: `docs/MAC_SETUP.md`. Gemini 키는 `backend/.env` 에 직접 (`.env.example` 참고, git 에 안 올라감)
+- 서버 버전: `docs/MAC_SETUP.md`. 외부 AI(Gemini 등)·API 키 없이 동작 (2026-11 Gemini 연동 제거, 키도 폐기)
+- 키 유출 방지: 새 PC 에서 처음 한 번 `git config core.hooksPath .githooks` 실행 →
+  커밋할 때 API 키 패턴이나 `.env` 파일이 들어 있으면 `.githooks/pre-commit` 이 커밋을 막음
 
 ## 다음 할 일 후보
 1. 폭행 전용 학습 모델 (공개 싸움 데이터셋 Aktı et al. 2019, MIT 로 동작 분류 학습)
 2. 화재·연기 감지 모델
 3. 실제 웹캠으로 동작 학습·폭행 연기 테스트 후 기준값 조정
-4. Gemini 크레딧 충전 후 서버 버전 AI 판단 확인 (채팅에 붙여 넣었던 키는 새로 발급해 교체 권장)
 
 ## 영상·모델 출처
 - 공공장소 GIF: Surveillance Camera Fight Dataset (Ş. Aktı et al., IPTA 2019, MIT)

@@ -1,0 +1,13 @@
+#!/bin/sh
+# 커밋 전 비밀키 검사: API 키 패턴이나 .env 파일이 올라가려 하면 커밋을 막는다.
+P='AIza[0-9A-Za-z_-]{35}|AQ\.Ab[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|GEMINI_API_KEY=[^여[:space:]]'
+fail=0
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  case "$f" in
+    *.env|.env|*/.env) echo "차단: $f (.env 파일은 커밋 금지)"; fail=1;;
+  esac
+done
+if git diff --cached -U0 --no-color -- . ':!*.wasm' ':!*.gif' ':!.githooks/pre-commit' | grep '^+' | grep -qE "$P"; then
+  echo "차단: 변경 내용에 API 키로 보이는 문자열이 있습니다."; fail=1
+fi
+[ $fail -eq 0 ] || { echo "키를 지우고 다시 커밋하세요. (키는 backend/.env 에만)"; exit 1; }
