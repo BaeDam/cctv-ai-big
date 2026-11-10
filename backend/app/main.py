@@ -1,7 +1,9 @@
 """FastAPI 서버: 카메라 워커 실행, 이벤트 WebSocket 방송, 신고 사건 관리, 프론트엔드 제공.
 
-실행:  cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+실행:  cd backend && uvicorn app.main:app --host 127.0.0.1 --port 8000
 접속:  http://localhost:8000
+보안:  로그인 기능이 없으므로 이 PC 에서만 접속(127.0.0.1). 같은 와이파이의 다른 기기에
+       카메라 화면·신고 버튼이 노출되지 않게 0.0.0.0 으로 열지 말 것.
 """
 
 from __future__ import annotations

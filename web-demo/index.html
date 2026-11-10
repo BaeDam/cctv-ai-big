@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; img-src 'self' blob: data:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- 보안: 이 사이트 밖으로는 어떤 연결도 못 하게 브라우저가 막음 (영상·기록이 외부로 나가지 않음) -->
 <title>지켜봄 관제</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
@@ -377,8 +379,9 @@ kbd{font-family:var(--mono);font-size:10.5px;background:var(--s3);border:1px sol
 "use strict";
 
 /* ===================================================================== 설정 */
-const ORT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js";
-const ORT_MJS = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs";
+// AI 실행기 onnxruntime-web 1.20.1 (MIT) — 외부 CDN 없이 이 사이트에서 직접 제공 (npm 공식 파일과 동일, 변조 위험 차단)
+const ORT_URL = new URL("ort.webgpu.min.js", location.href).href;
+const ORT_MJS = new URL("ort-jsep.js", location.href).href;
 const MODEL_URL = "model-pose640.gz.wasm";  // gzip 압축된 ONNX 모델 (서빙 형식 때문에 .wasm 이름)
 const WASM_URL = "runtime-jsep.gz.wasm";    // gzip 압축된 ONNX Runtime WebAssembly
 const PPE_URL = "model-ppe640.gz.wasm";     // 안전모 감지 모델 (Construction Site Safety, CC BY 4.0 데이터로 학습된 공개 YOLOv8)

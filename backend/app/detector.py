@@ -41,7 +41,9 @@ class Detector:
         device: str = "auto",
         imgsz: int = 640,
     ):
-        from ultralytics import YOLO  # 무거운 의존성이라 실제 사용할 때만 import
+        from ultralytics import YOLO, settings  # 무거운 의존성이라 실제 사용할 때만 import
+
+        settings.update({"sync": False})  # Ultralytics 사용 통계 외부 전송 끄기 (개인정보)
 
         self.pose = YOLO(pose_model)
         self.helmet = YOLO(helmet_model) if helmet_model else None

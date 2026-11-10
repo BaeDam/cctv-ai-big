@@ -31,7 +31,9 @@ def main() -> None:
     ap.add_argument("--imgsz", type=int, default=640)
     args = ap.parse_args()
 
-    from ultralytics import YOLO
+    from ultralytics import YOLO, settings
+
+    settings.update({"sync": False})  # 사용 통계 외부 전송 끄기
 
     fmt = args.format or auto_format()
     print(f"변환 형식: {fmt}")

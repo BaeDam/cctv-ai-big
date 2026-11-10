@@ -37,7 +37,7 @@ python -c "import torch; print('맥 GPU 사용 가능:', torch.backends.mps.is_a
 ```bash
 cd cctv-ai-big/backend
 source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 - 처음 실행하면 AI 모델(`yolo11n-pose.pt`, 약 6MB)을 자동으로 받습니다.

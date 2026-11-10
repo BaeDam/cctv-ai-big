@@ -24,7 +24,7 @@
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 # http://localhost:8000 접속
 ```
 `backend/config.yaml` 에서 카메라 `source` 에 RTSP 주소(예: `rtsp://user:pass@192.168.0.10:554/stream1`),
@@ -53,3 +53,19 @@ docs/PLAN.md         구상서
 
 > ⚠️ 신고 채널 기본값은 `mock`(로그만 남김)입니다. 112/119 직접 자동 연동은 오신고 문제로
 > 관할 기관 협의가 필요하며, 우선 현장 관리자 문자·관제업체 webhook 연동을 권장합니다.
+
+## 보안·비용 원칙
+- **유료 서비스·API 키 없음.** 외부 AI(Gemini 등) 연동은 제거했고, 모든 AI 는 내 PC·브라우저 안에서만 돕니다.
+- **영상이 밖으로 나가지 않음.** 사이트(`web-demo`)는 AI 실행기까지 직접 제공하고, 보안 정책(CSP)으로 외부 연결 자체를 막습니다.
+- **서버는 이 PC 에서만 접속**(`--host 127.0.0.1`). 로그인 기능이 없으므로 와이파이 전체에 열지 마세요.
+- Ultralytics 사용 통계 전송은 꺼 둡니다 (`settings.sync=False`).
+- 커밋 전 비밀키 검사: 처음 한 번 `git config core.hooksPath .githooks`
+
+## 라이선스·출처
+| 구성 요소 | 라이선스 | 주의 |
+|---|---|---|
+| Ultralytics YOLO11n-pose (사람·관절) | AGPL-3.0 | 소스 공개 저장소에서 쓰는 건 무료. **상업 서비스로 팔 때는 소스 공개 또는 Ultralytics 유료 라이선스 필요** |
+| 안전모 모델 (snehilsanyal/Construction-Site-Safety-PPE-Detection, YOLOv8) | AGPL-3.0 (Ultralytics 기반), 학습 데이터 Roboflow Construction Site Safety CC BY 4.0 | 출처 표기 필요 |
+| onnxruntime-web 1.20.1 | MIT | |
+| 공공장소 GIF: Surveillance Camera Fight Dataset (Aktı et al., IPTA 2019) | MIT | |
+| 요양병원 GIF: ambianic/fall-detection | 저장소 라이선스 따름 | |
