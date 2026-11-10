@@ -30,13 +30,23 @@ AI 모델(YOLO11n-pose)을 브라우저 안에서 직접 돌리는 16분할 관�
 - 단축키: ←/→ 페이지, 1·4·9·6 분할, Enter 확대, Space AI, ? 도움말
 - GPU(WebGPU)가 있으면 GPU로, 없으면 CPU(WebAssembly, 코어별 병렬)로 실행
 
+## 감지 종류
+| 종류 | 방식 | 신고 | 확인한 성능 |
+|---|---|---|---|
+| 쓰러짐 → 무반응 | 자세 + 시간 흐름 규칙 | 119 | 실제 낙상 영상 5개 중 4개 |
+| 싸움·폭행 의심 | 몸이 겹친 2명의 빠른 팔 움직임 (분석 속도에 맞춰 기준 조절) | 1차 '확인 필요' 알림, 15초 안에 재감지 시 112 | 공개 싸움 영상 50+50개 기준 약 20% 감지, 평상시 오탐 약 2% |
+| 안전모 미착용 | 안전모 감지 모델 + 머리 위치 | 주의 알림 | 공사장 GIF 전원 착용 판정, 미착용 웹캠 영상 감지 |
+| 학습 동작 | 관절 움직임 기록·비교 | 설정한 대로 | 가짜 웹캠으로 기록·인식 확인 |
+
 ## 현재 한계
-- 싸움·폭행, 안전모 미착용, 화재 판단은 아직 없음 (사람 인식과 쓰러짐만)
+- 폭행은 규칙 기반이라 놓치는 경우가 많음 → 폭행 전용 학습 모델 필요
+- 화재·연기 감지 없음
 
 ## AI 모델 파일 (저장소에 포함, 사이트에서 바로 사용)
 | 파일 | 만든 방법 |
 |---|---|
 | `model-pose640.gz.wasm` | `yolo export model=yolo11n-pose.pt format=onnx imgsz=640 opset=17 simplify=True` 후 `gzip -9` (이름만 .wasm) |
+| `model-ppe640.gz.wasm` | 공개 안전모 감지 모델(github.com/snehilsanyal/Construction-Site-Safety-PPE-Detection, Roboflow Construction Site Safety 데이터 CC BY 4.0로 학습된 YOLOv8)을 ONNX로 변환 후 `gzip -9` |
 | `runtime-jsep.gz.wasm` | npm `onnxruntime-web@1.20.1` 의 `dist/ort-wasm-simd-threaded.jsep.wasm` 을 `gzip -9` |
 
 ## 영상 출처
